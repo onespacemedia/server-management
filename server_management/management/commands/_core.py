@@ -39,8 +39,6 @@ def ansible_task(host, **kwargs):
         'remote_user': 'root'
     }.items() + kwargs.items())
 
-    ansible.constants.HOST_KEY_CHECKING = False
-
     return ansible.runner.Runner(**ansible_args).run()
 
 

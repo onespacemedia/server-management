@@ -1,0 +1,5 @@
+[program:{{ project }}]
+command = /var/www/{{ project }}/.venv/bin/gunicorn_start
+user = {{ project }}
+stdout_logfile = /var/log/gunicorn_supervisor.log
+redirect_stderr = true

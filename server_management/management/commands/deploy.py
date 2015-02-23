@@ -2,10 +2,10 @@ from getpass import getpass
 import os
 import re
 from urllib import urlencode
+
 from django.conf import settings as django_settings
 from django.core.files.temp import NamedTemporaryFile
 from django.core.management.base import BaseCommand
-from django.template import loader, Context
 from django.template.loader import render_to_string
 from fabric.api import *
 import requests
@@ -76,12 +76,36 @@ class Command(BaseCommand):
 
         # Create session_files
         session_files = {
-            'pgpass': NamedTemporaryFile(delete=False)
+            'pgpass': NamedTemporaryFile(delete=False),
+            'gunicorn_start': NamedTemporaryFile(delete=False),
+            'maintenance_off': NamedTemporaryFile(delete=False),
+            'supervisor_config': NamedTemporaryFile(delete=False),
+            'nginx_site_config': NamedTemporaryFile(delete=False),
         }
 
         # Parse files
         session_files['pgpass'].write(render_to_string('pgpass', config['remote']['database']))
         session_files['pgpass'].close()
+
+        session_files['gunicorn_start'].write(render_to_string('gunicorn_start', {
+            'project': project_folder
+        }))
+        session_files['gunicorn_start'].close()
+
+        session_files['maintenance_off'].write(render_to_string('maintenance_off', {}))
+        session_files['maintenance_off'].close()
+
+        session_files['supervisor_config'].write(render_to_string('supervisor_config', {
+            'project': project_folder
+        }))
+        session_files['supervisor_config'].close()
+
+        session_files['nginx_site_config'].write(render_to_string('nginx_site_config', {
+            'project': project_folder,
+            'domain_names': domain_names,
+            'fallback_domain_name': fallback_domain_name
+        }))
+        session_files['nginx_site_config'].close()
 
         # Define base tasks
         base_tasks = [
@@ -108,8 +132,17 @@ class Command(BaseCommand):
                     'python-httplib2',
                     'supervisor',
                     'openjdk-6-jre-headless',
-                    'libjpeg-dev'
+                    'libjpeg-dev',
+                    'libffi-dev',
+                    'ruby-dev'
                 ]
+            },
+            {
+                'title': "Install compass",
+                'ansible_arguments': {
+                    'module_name': 'gem',
+                    'module_args': 'name=compass state=latest user_install=no'
+                }
             },
             {
                 'title': "Generate SSH key",
@@ -286,7 +319,7 @@ class Command(BaseCommand):
                 'title': "Setup the Git repo",
                 'ansible_arguments': {
                     'module_name': 'git',
-                    'module_args': 'repo={} dest={} accept_hostkey=yes'.format(
+                    'module_args': 'repo={} dest={} accept_hostkey=yes ssh_opts="-o StrictHostKeyChecking=no"'.format(
                         "git@bitbucket.org:{}/{}.git".format(
                             bitbucket_account,
                             bitbucket_repo
@@ -329,6 +362,279 @@ class Command(BaseCommand):
         ]
         run_tasks(env.host_string, static_tasks)
 
+        # Define venv tasks
+        venv_tasks = [
+            {
+                'title': "Create the virtualenv",
+                'ansible_arguments': {
+                    'module_name': 'command',
+                    'module_args': 'virtualenv /var/www/{project}/.venv --no-site-packages creates=/var/www/{project}/.venv'.format(
+                        project=project_folder
+                    )
+                }
+            },
+            {
+                'title': "Create the Gunicorn script file",
+                'ansible_arguments': {
+                    'module_name': 'copy',
+                    'module_args': 'src={file} dest=/var/www/{project}/.venv/bin/gunicorn_start owner={project} group=webapps mode=0755 backup=yes'.format(
+                        file=session_files['gunicorn_start'].name,
+                        project=project_folder
+                    )
+                }
+            },
+            {
+                'title': "Create the application log folder",
+                'ansible_arguments': {
+                    'module_name': 'file',
+                    'module_args': 'path=/var/log owner={} group=webapps mode=0774 state=directory'.format(
+                        project_folder
+                    )
+                }
+            },
+            {
+                'title': "Create the application log file",
+                'ansible_arguments': {
+                    'module_name': 'command',
+                    'module_args': 'touch /var/log/gunicorn_supervisor.log creates=/var/log/gunicorn_supervisor.log'
+                }
+            },
+            {
+                'title': "Set permission to the application log file",
+                'ansible_arguments': {
+                    'module_name': 'file',
+                    'module_args': 'path=/var/log/gunicorn_supervisor.log owner={} group=webapps mode=0664 state=file'.format(
+                        project_folder
+                    )
+                }
+            },
+            {
+                'title': "Create the maintenance page",
+                'ansible_arguments': {
+                    'module_name': 'copy',
+                    'module_args': 'src={} dest=/var/www/{}/.venv/maintenance_off.html mode=0664'.format(
+                        session_files['maintenance_off'].name,
+                        project_folder
+                    )
+                }
+            },
+        ]
+        run_tasks(env.host_string, venv_tasks)
+
+        # Check to see if we have a requirements file
+        print "[\033[95mTASK\033[0m] Looking for a requirements.txt file..."
+        requirements_check = ansible_task(
+            env.host_string,
+            module_name='stat',
+            module_args='path=/var/www/{}/requirements.txt'.format(
+                project_folder
+            )
+        )
+        check_request(requirements_check, env.host_string, "TASK")
+
+        print ""
+
+        # Define requirement tasks
+        requirement_tasks = []
+
+        # Check to see if the requirements file exists
+        if requirements_check['contacted'][env.host_string]['stat']['exists']:
+            requirement_tasks.append(
+                {
+                    'title': "Install packages required by the Django app inside virtualenv",
+                    'ansible_arguments': {
+                        'module_name': 'pip',
+                        'module_args': 'virtualenv=/var/www/{project}/.venv requirements=/var/www/{project}/requirements.txt'.format(
+                            project=project_folder
+                        )
+                    }
+                }
+            )
+
+        # Add the regular tasks
+        requirement_tasks = requirement_tasks + [
+            {
+                'title': "Make sure Gunicorn is installed",
+                'ansible_arguments': {
+                    'module_name': 'pip',
+                    'module_args': 'virtualenv=/var/www/{project}/.venv name=gunicorn'.format(
+                        project=project_folder
+                    )
+                }
+            },
+            {
+                'title': "Collect static files",
+                'ansible_arguments': {
+                    'module_name': 'django_manage',
+                    'module_args': 'command=collectstatic app_path=/var/www/{project} virtualenv=/var/www/{project}/.venv link=yes settings={project}.settings.production'.format(
+                        project=project_folder
+                    )
+                }
+            },
+            {
+                'title': "Update media permissions",
+                'ansible_arguments': {
+                    'module_name': 'file',
+                    'module_args': 'path=/var/www/{project}_media/ owner={project} group=webapps recurse=yes'.format(
+                        project=project_folder
+                    )
+                }
+            },
+        ]
+
+        run_tasks(env.host_string, requirement_tasks)
+
+        # Define permission tasks
+        permission_tasks = [
+            {
+                'title': "Make the run directory",
+                'ansible_arguments': {
+                    'module_name': 'file',
+                    'module_args': 'path={} state=directory owner={} group=webapps recurse=yes'.format(
+                        "/var/www/{}/.venv/run".format(
+                            project_folder
+                        ),
+                        project_folder
+                    )
+                }
+            },
+            {
+                'title': "Ensure that the application file permissions are set properly",
+                'ansible_arguments': {
+                    'module_name': 'file',
+                    'module_args': 'path=/var/www/{project}/.venv recurse=yes owner={project} group=webapps state=directory'.format(
+                        project=project_folder
+                    )
+                }
+            }
+        ]
+        run_tasks(env.host_string, permission_tasks)
+
+        # Define nginx tasks
+        nginx_tasks = [
+            {
+                'title': "Install Nginx",
+                'ansible_arguments': {
+                    'module_name': 'apt',
+                    'module_args': 'name=nginx state=installed'
+                }
+            },
+            {
+                'title': "Create the Nginx configuration file",
+                'ansible_arguments': {
+                    'module_name': 'copy',
+                    'module_args': 'src={} dest=/etc/nginx/sites-available/{} backup=yes'.format(
+                        session_files['nginx_site_config'].name,
+                        project_folder
+                    )
+                }
+            },
+            {
+                'title': "Ensure that the default site is disabled",
+                'ansible_arguments': {
+                    'module_name': 'command',
+                    'module_args': 'rm /etc/nginx/sites-enabled/default removes=/etc/nginx/sites-enabled/default'
+                }
+            },
+            {
+                'title': "Ensure that the application site is enabled",
+                'ansible_arguments': {
+                    'module_name': 'command',
+                    'module_args': 'ln -s /etc/nginx/sites-available/{project} /etc/nginx/sites-enabled/{project} creates=/etc/nginx/sites-enabled/{project}'.format(
+                        project=project_folder
+                    )
+                }
+            },
+            {
+                'title': "Reload Nginx",
+                'ansible_arguments': {
+                    'module_name': 'command',
+                    'module_args': 'service nginx reload'
+                }
+            },
+            {
+                'title': "Ensure Nginx service is started",
+                'ansible_arguments': {
+                    'module_name': 'service',
+                    'module_args': 'name=nginx state=started enabled=yes'
+                }
+            },
+        ]
+        run_tasks(env.host_string, nginx_tasks)
+
+        # Define supervisor tasks
+        supervisor_tasks = [
+            {
+                'title': "Create the Supervisor config file",
+                'ansible_arguments': {
+                    'module_name': 'copy',
+                    'module_args': 'src={} dest=/etc/supervisor/conf.d/{}.conf backup=yes'.format(
+                        session_files['supervisor_config'].name,
+                        project_folder
+                    )
+                }
+            },
+            {
+                'title': "Re-read the Supervisor config files",
+                'ansible_arguments': {
+                    'module_name': 'command',
+                    'module_args': 'supervisorctl reread'
+                }
+            },
+            {
+                'title': "Update Supervisor to add the app in the process group",
+                'ansible_arguments': {
+                    'module_name': 'command',
+                    'module_args': 'supervisorctl update'
+                }
+            },
+        ]
+        run_tasks(env.host_string, supervisor_tasks)
+
         # Delete files
         for session_file in session_files:
             os.unlink(session_files[session_file].name)
+
+        # Create a final dump of the database
+        local('pg_dump {name} -cOx -U {user} -f ~/{name}-final-dump.sql --clean'.format(
+            name=config['local']['database']['name'],
+            user=os.getlogin()
+        ))
+
+        # Create uploads folder
+        local('mkdir -p {}/uploads/'.format(
+            django_settings.MEDIA_ROOT
+        ))
+
+        # Sync local files up to the server
+        local('rsync -rhe "ssh -o StrictHostKeyChecking=no" {}/uploads/ {}@{}:{}'.format(
+            django_settings.MEDIA_ROOT,
+            'root',
+            config['remote']['server']['ip'],
+            '/var/www/{}_media/uploads/'.format(
+                project_folder
+            )
+        ))
+
+        # Push the database from earlier up to the server
+        local('scp ~/{}-final-dump.sql {}@{}:/tmp/{}.sql'.format(
+            config['local']['database']['name'],
+            'root',
+            config['remote']['server']['ip'],
+            config['remote']['database']['name'],
+        ))
+
+        # Import the database file
+        sudo("su - {name} -c 'psql -q {name} < /tmp/{name}.sql > /dev/null 2>&1'".format(
+            name=config['remote']['database']['name']
+        ))
+
+        # Remove the database file
+        run('rm /tmp/{}.sql'.format(
+            config['remote']['database']['name']
+        ))
+
+        # Remove the SQL file from the host
+        local('rm ~/{}-final-dump.sql'.format(
+            config['local']['database']['name']
+        ))

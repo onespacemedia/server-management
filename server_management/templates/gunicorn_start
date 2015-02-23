@@ -1,0 +1,29 @@
+#!/bin/bash
+
+NAME="{{ project }}"
+DJANGODIR=/var/www/{{ project }}
+SOCKFILE=/var/www/{{ project }}/.venv/run/gunicorn.sock
+USER={{ project }}
+GROUP=webapps
+NUM_WORKERS=`expr 2 \* \`cat /proc/cpuinfo | grep Processor | wc -l\` + 1`
+DJANGO_WSGI_MODULE={{ project }}.wsgi
+
+echo "Starting $NAME as `whoami`"
+
+# Activate the virtual environment.
+cd $DJANGODIR
+source .venv/bin/activate
+
+# Create the run directory if it doesn't exist.
+RUNDIR=$(dirname $SOCKFILE)
+test -d $RUNDIR || mkdir -p $RUNDIR
+
+# Programs meant to be run under supervisor should not daemonize themselves
+# (do not use --daemon).
+exec .venv/bin/gunicorn ${DJANGO_WSGI_MODULE}:application \
+		--settings={{ project }}.settings.production \
+ 		--name $NAME \
+  		--workers $NUM_WORKERS \
+  		--user=$USER --group=$GROUP \
+  		--log-level=debug \
+  		--bind=unix:$SOCKFILE
