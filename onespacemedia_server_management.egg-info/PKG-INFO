@@ -1,0 +1,11 @@
+Metadata-Version: 1.1
+Name: onespacemedia-server-management
+Version: 0.1
+Summary: A set of server management tools used by Onespacemedia.
+Home-page: http://www.onespacemedia.com/
+Author: James Foley
+Author-email: jamesfoley@onespacemedia.com
+License: UNKNOWN
+Description: UNKNOWN
+Platform: UNKNOWN
+Requires: django
