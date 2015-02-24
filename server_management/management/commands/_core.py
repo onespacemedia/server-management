@@ -32,12 +32,12 @@ def ansible_task(host, **kwargs):
     ansible_inventory = ansible.inventory.Inventory([host])
 
     ansible_args = dict({
-        'pattern': 'all',
-        'inventory': ansible_inventory,
-        'sudo': True,
-        'sudo_user': 'root',
-        'remote_user': 'root'
-    }.items() + kwargs.items())
+                            'pattern': 'all',
+                            'inventory': ansible_inventory,
+                            'sudo': True,
+                            'sudo_user': 'root',
+                            'remote_user': 'root'
+                        }.items() + kwargs.items())
 
     return ansible.runner.Runner(**ansible_args).run()
 
@@ -63,7 +63,6 @@ def run_tasks(host, tasks):
             module_args_pattern = task['ansible_arguments']['module_args']
 
             for item in task.get('with_items'):
-
                 print "[\033[94mITEM\033[0m] {}".format(item)
 
                 # Format args with item

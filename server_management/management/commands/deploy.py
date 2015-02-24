@@ -51,9 +51,11 @@ class Command(BaseCommand):
                         bitbucket_account = bb_regex.group(1)
                         bitbucket_repo = bb_regex.group(2)
 
-                project_folder = local("basename $( find {} -name 'wsgi.py' -not -path '*/.venv/*' -not -path '*/venv/*' | xargs -0 -n1 dirname )".format(
-                    local_project_path
-                ), capture=True)
+                project_folder = local(
+                    "basename $( find {} -name 'wsgi.py' -not -path '*/.venv/*' -not -path '*/venv/*' | xargs -0 -n1 "
+                    "dirname )".format(
+                        local_project_path
+                    ), capture=True)
 
         # Compress the domain names for nginx
         domain_names = " ".join(django_settings.ALLOWED_HOSTS)
@@ -188,14 +190,17 @@ class Command(BaseCommand):
                 'title': "Backuping Postgresql main config file",
                 'ansible_arguments': {
                     'module_name': 'command',
-                    'module_args': 'mv /etc/postgresql/9.3/main/postgresql.conf /etc/postgresql/9.3/main/postgresql.conf.old creates=/etc/postgresql/9.3/main/postgresql.conf.old'
+                    'module_args': 'mv /etc/postgresql/9.3/main/postgresql.conf '
+                                   '/etc/postgresql/9.3/main/postgresql.conf.old '
+                                   'creates=/etc/postgresql/9.3/main/postgresql.conf.old'
                 }
             },
             {
                 'title': "Setting Postgresql Optmizing via pgtune",
                 'ansible_arguments': {
                     'module_name': 'command',
-                    'module_args': 'pgtune -i /etc/postgresql/9.3/main/postgresql.conf.old -o /etc/postgresql/9.3/main/postgresql.conf --type=Web',
+                    'module_args': 'pgtune -i /etc/postgresql/9.3/main/postgresql.conf.old -o '
+                                   '/etc/postgresql/9.3/main/postgresql.conf --type=Web',
                     'sudo_user': 'postgres'
                 }
             },
@@ -203,7 +208,8 @@ class Command(BaseCommand):
                 'title': "Ensure database is created",
                 'ansible_arguments': {
                     'module_name': 'postgresql_db',
-                    'module_args': "name='{}' encoding='UTF-8' lc_collate='en_GB.UTF-8' lc_ctype='en_GB.UTF-8' template='template0' state=present".format(
+                    'module_args': "name='{}' encoding='UTF-8' lc_collate='en_GB.UTF-8' lc_ctype='en_GB.UTF-8' "
+                                   "template='template0' state=present".format(
                         config['remote']['database']['name']
                     ),
                     'sudo_user': 'postgres'
@@ -368,7 +374,8 @@ class Command(BaseCommand):
                 'title': "Create the virtualenv",
                 'ansible_arguments': {
                     'module_name': 'command',
-                    'module_args': 'virtualenv /var/www/{project}/.venv --no-site-packages creates=/var/www/{project}/.venv'.format(
+                    'module_args': 'virtualenv /var/www/{project}/.venv --no-site-packages creates=/var/www/{'
+                                   'project}/.venv'.format(
                         project=project_folder
                     )
                 }
@@ -377,7 +384,8 @@ class Command(BaseCommand):
                 'title': "Create the Gunicorn script file",
                 'ansible_arguments': {
                     'module_name': 'copy',
-                    'module_args': 'src={file} dest=/var/www/{project}/.venv/bin/gunicorn_start owner={project} group=webapps mode=0755 backup=yes'.format(
+                    'module_args': 'src={file} dest=/var/www/{project}/.venv/bin/gunicorn_start owner={project} '
+                                   'group=webapps mode=0755 backup=yes'.format(
                         file=session_files['gunicorn_start'].name,
                         project=project_folder
                     )
@@ -403,7 +411,8 @@ class Command(BaseCommand):
                 'title': "Set permission to the application log file",
                 'ansible_arguments': {
                     'module_name': 'file',
-                    'module_args': 'path=/var/log/gunicorn_supervisor.log owner={} group=webapps mode=0664 state=file'.format(
+                    'module_args': 'path=/var/log/gunicorn_supervisor.log owner={} group=webapps mode=0664 '
+                                   'state=file'.format(
                         project_folder
                     )
                 }
@@ -444,7 +453,8 @@ class Command(BaseCommand):
                     'title': "Install packages required by the Django app inside virtualenv",
                     'ansible_arguments': {
                         'module_name': 'pip',
-                        'module_args': 'virtualenv=/var/www/{project}/.venv requirements=/var/www/{project}/requirements.txt'.format(
+                        'module_args': 'virtualenv=/var/www/{project}/.venv requirements=/var/www/{'
+                                       'project}/requirements.txt'.format(
                             project=project_folder
                         )
                     }
@@ -466,7 +476,8 @@ class Command(BaseCommand):
                 'title': "Collect static files",
                 'ansible_arguments': {
                     'module_name': 'django_manage',
-                    'module_args': 'command=collectstatic app_path=/var/www/{project} virtualenv=/var/www/{project}/.venv link=yes settings={project}.settings.production'.format(
+                    'module_args': 'command=collectstatic app_path=/var/www/{project} virtualenv=/var/www/{'
+                                   'project}/.venv link=yes settings={project}.settings.production'.format(
                         project=project_folder
                     )
                 }
@@ -502,7 +513,8 @@ class Command(BaseCommand):
                 'title': "Ensure that the application file permissions are set properly",
                 'ansible_arguments': {
                     'module_name': 'file',
-                    'module_args': 'path=/var/www/{project}/.venv recurse=yes owner={project} group=webapps state=directory'.format(
+                    'module_args': 'path=/var/www/{project}/.venv recurse=yes owner={project} group=webapps '
+                                   'state=directory'.format(
                         project=project_folder
                     )
                 }
@@ -540,7 +552,8 @@ class Command(BaseCommand):
                 'title': "Ensure that the application site is enabled",
                 'ansible_arguments': {
                     'module_name': 'command',
-                    'module_args': 'ln -s /etc/nginx/sites-available/{project} /etc/nginx/sites-enabled/{project} creates=/etc/nginx/sites-enabled/{project}'.format(
+                    'module_args': 'ln -s /etc/nginx/sites-available/{project} /etc/nginx/sites-enabled/{project} '
+                                   'creates=/etc/nginx/sites-enabled/{project}'.format(
                         project=project_folder
                     )
                 }
@@ -595,46 +608,70 @@ class Command(BaseCommand):
         for session_file in session_files:
             os.unlink(session_files[session_file].name)
 
-        # Create a final dump of the database
-        local('pg_dump {name} -cOx -U {user} -f ~/{name}-final-dump.sql --clean'.format(
-            name=config['local']['database']['name'],
-            user=os.getlogin()
-        ))
+        with hide('output', 'running'):
+            # Create a final dump of the database
+            print "[\033[95mTASK\033[0m] Dumping local database to file..."
+            local('pg_dump {name} -cOx -U {user} -f ~/{name}-final-dump.sql --clean'.format(
+                name=config['local']['database']['name'],
+                user=os.getlogin()
+            ))
+            print "[\033[95mTASK\033[0m] [\033[92mDONE\033[0m]"
+            print ""
 
-        # Create uploads folder
-        local('mkdir -p {}/uploads/'.format(
-            django_settings.MEDIA_ROOT
-        ))
+            # Create uploads folder
+            print "[\033[95mTASK\033[0m] Create uploads folder..."
+            local('mkdir -p {}/uploads/'.format(
+                django_settings.MEDIA_ROOT
+            ))
+            print "[\033[95mTASK\033[0m] [\033[92mDONE\033[0m]"
+            print ""
 
-        # Sync local files up to the server
-        local('rsync -rhe "ssh -o StrictHostKeyChecking=no" {}/uploads/ {}@{}:{}'.format(
-            django_settings.MEDIA_ROOT,
-            'root',
-            config['remote']['server']['ip'],
-            '/var/www/{}_media/uploads/'.format(
-                project_folder
-            )
-        ))
+            # Sync local files up to the server
+            print "[\033[95mTASK\033[0m] Push local uploads to the server..."
+            local('rsync -rhe "ssh -o StrictHostKeyChecking=no" {}/uploads/ {}@{}:{}'.format(
+                django_settings.MEDIA_ROOT,
+                'root',
+                config['remote']['server']['ip'],
+                '/var/www/{}_media/uploads/'.format(
+                    project_folder
+                )
+            ))
+            print "[\033[95mTASK\033[0m] [\033[92mDONE\033[0m]"
+            print ""
 
-        # Push the database from earlier up to the server
-        local('scp ~/{}-final-dump.sql {}@{}:/tmp/{}.sql'.format(
-            config['local']['database']['name'],
-            'root',
-            config['remote']['server']['ip'],
-            config['remote']['database']['name'],
-        ))
+            # Push the database from earlier up to the server
+            print "[\033[95mTASK\033[0m] Push local database to the server..."
+            local('scp ~/{}-final-dump.sql {}@{}:/tmp/{}.sql'.format(
+                config['local']['database']['name'],
+                'root',
+                config['remote']['server']['ip'],
+                config['remote']['database']['name'],
+            ))
+            print "[\033[95mTASK\033[0m] [\033[92mDONE\033[0m]"
+            print ""
 
-        # Import the database file
-        sudo("su - {name} -c 'psql -q {name} < /tmp/{name}.sql > /dev/null 2>&1'".format(
-            name=config['remote']['database']['name']
-        ))
+            # Import the database file
+            print "[\033[95mTASK\033[0m] Import uploaded database on the server..."
+            sudo("su - {name} -c 'psql -q {name} < /tmp/{name}.sql > /dev/null 2>&1'".format(
+                name=config['remote']['database']['name']
+            ))
+            print "[\033[95mTASK\033[0m] [\033[92mDONE\033[0m]"
+            print ""
 
-        # Remove the database file
-        run('rm /tmp/{}.sql'.format(
-            config['remote']['database']['name']
-        ))
+            # Remove the database file
+            print "[\033[95mTASK\033[0m] Delete the uploaded database file on the server..."
+            run('rm /tmp/{}.sql'.format(
+                config['remote']['database']['name']
+            ))
+            print "[\033[95mTASK\033[0m] [\033[92mDONE\033[0m]"
+            print ""
 
-        # Remove the SQL file from the host
-        local('rm ~/{}-final-dump.sql'.format(
-            config['local']['database']['name']
-        ))
+            # Remove the SQL file from the host
+            print "[\033[95mTASK\033[0m] Delete the local database file..."
+            local('rm ~/{}-final-dump.sql'.format(
+                config['local']['database']['name']
+            ))
+            print "[\033[95mTASK\033[0m] [\033[92mDONE\033[0m]"
+            print ""
+
+            print "Deploy complete"

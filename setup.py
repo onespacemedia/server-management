@@ -21,5 +21,5 @@ setup(
     url='http://www.onespacemedia.com/',
     author='James Foley',
     author_email='jamesfoley@onespacemedia.com',
-    requires=['django', 'fabric', 'ansible', 'requests'],
+    requires=['django', 'fabric', 'ansible', 'requests', 'fabvenv'],
 )
