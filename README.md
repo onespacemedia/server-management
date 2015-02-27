@@ -152,7 +152,7 @@ The deploy script is the most complex command in the library, but saves many man
 
 	
 ### PullDB
-* Dumps the database on the remote server to a SQL file.
+* Dumps the database on the remote server to an SQL file.
 * Pulls the database file down the the local machine (using ``scp``).
 * Removes the file from the remote server.
 * Drops the local database (with ``dropdb``).
@@ -163,3 +163,10 @@ The deploy script is the most complex command in the library, but saves many man
 ### PullMedia
 * Ensures the media folder exists on the local machine, creating it if necessary.
 * Pulls down the remote uploads folder (using ``rsync``).
+
+### PushDB
+* Dumps the database on the local machine to an SQL file.
+* Uploads the database to the remote server.
+* Imports the SQL file into the remote database.
+* Removes the SQL file from the remote server.
+* Removes the SQL file from the local machine.
