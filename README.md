@@ -22,6 +22,7 @@ The commands are all wrappers around [Ansible's](/ansible/ansible) [Python API](
 * Your project is expected to use a virtual environment, with the folder in the same directory as the ``manage.py`` file, and be named ``venv`` or ``.venv``.
 * The deploy script currently logs in as root and installs the base packages as root. The application, PostgreSQL server and Supervisor all run under their own users.
 * The deployment script does not currently support uploading HTTPS / SSL certificates or automatically configurating nginx to handle HTTPS traffic.
+* Specific static and media paths are required, they are documented below.
 
 ## Installation
 
@@ -60,6 +61,10 @@ Next, you need to create a ``server.json`` file which contains the information a
 
 The default PostgreSQL deployment uses trust authentication for connecting to the database, so a password is not usually required.
 
+Update your ``STATIC_ROOT`` and ``MEDIA_ROOT`` to match the format the scripts expect:
+
+    STATIC_ROOT = "/var/www/example_static"
+    MEDIA_ROOT = "/var/www/example_media"
 
 
 ## Usage
