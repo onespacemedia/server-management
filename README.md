@@ -173,3 +173,12 @@ The deploy script is the most complex command in the library, but saves many man
 
 ### PushMedia
 * Pushes up the local uploads folder to the remote server (using ``rsync``)
+
+### Update
+* Ensures the file permissions are correct on the remote server.
+* Runs a ``git pull`` in the virtual environment.
+* Installs the requirements from the ``requirements.txt``.
+* Runs ``collectstatic`` and symlinks the files into the static directory.
+* Runs database migrations.
+* Restarts the Supervisor instance.
+* Ensures the file permissions are still correct.
