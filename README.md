@@ -1,6 +1,4 @@
-===============================
-server-management
-===============================
+# server-management
 
 ``server-management`` allows for very simple deployment and day-to-day management of Django projects.  Primarily used and maintained by the team at [Onespacemedia](http://www.onespacemedia.com/), but should work for most people.  It allows you to deploy a Django application, preferably onto a Ubuntu or Debian server, and maintain the application over time.
 
@@ -23,15 +21,13 @@ server-management
 * The deploy script currently logs in as root and installs the base packages as root. The application, PostgreSQL server and supervisor all run under their own users.
 * The deployment script does not currently support uploading HTTPS / SSL certificates or automatically configurating nginx to handle HTTPS traffic.
 
-Installation
-------------
+## Installation
 
 To install ``server-management`` simply run:
 
     $ pip install server-management
     
-Configuration
--------------
+## Configuration
 
 We need to add ``server-management`` to our project, so add ``server_management`` to your ``INSTALLED_APPS``.
 
@@ -63,8 +59,7 @@ Next, you need to create a ``server.json`` file which contains the information a
 The default PostgreSQL deployment uses trust authentication for connecting to the database, so a password is not usually required.
 
 
-Usage
------
+## Usage
 
 Once the project has been added to your project you will have access to a number of ``manage.py`` commands, they are as follows:
 
