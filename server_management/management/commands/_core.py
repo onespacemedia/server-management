@@ -55,7 +55,6 @@ def run_tasks(host, tasks):
             # Check result
             check_request(task_result, host, "TASK")
 
-
         else:
             print "[\033[95mTASK\033[0m] {}...".format(task['title'])
 

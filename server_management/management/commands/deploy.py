@@ -300,7 +300,7 @@ class Command(BaseCommand):
             print "[\033[95mTASK\033[0m] Adding the SSH key to bitbucket..."
 
             try:
-                add_key_to_repo = requests.post(
+                requests.post(
                     'https://bitbucket.org/api/1.0/repositories/{}/{}/deploy-keys/'.format(
                         bitbucket_account,
                         bitbucket_repo

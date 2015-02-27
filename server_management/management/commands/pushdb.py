@@ -1,10 +1,10 @@
-import os
-from django.conf import settings as django_settings
 from django.core.management.base import BaseCommand
-from fabric.api import *
-from fabvenv import virtualenv
 
 from _core import load_config
+
+from fabric.api import *
+
+import os
 
 
 class Command(BaseCommand):
@@ -24,17 +24,6 @@ class Command(BaseCommand):
                 if not run('whoami'):
                     print "Failed to connect to remote server"
                     exit()
-
-        # Set local project path
-        local_project_path = django_settings.SITE_ROOT
-
-        # Change into the local project folder
-        with hide('output', 'running', 'warnings'):
-            with lcd(local_project_path):
-
-                project_folder = local("basename $( find {} -name 'wsgi.py' -not -path '*/.venv/*' -not -path '*/venv/*' | xargs -0 -n1 dirname )".format(
-                    local_project_path
-                ), capture=True)
 
         with settings(warn_only=True):
 

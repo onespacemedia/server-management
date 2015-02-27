@@ -1,10 +1,9 @@
-import os
-from django.conf import settings as django_settings
+# from django.conf import settings as django_settings
 from django.core.management.base import BaseCommand
-from fabric.api import *
-from fabvenv import virtualenv
 
 from _core import load_config
+
+from fabric.api import *
 
 
 class Command(BaseCommand):
@@ -25,21 +24,9 @@ class Command(BaseCommand):
                     print "Failed to connect to remote server"
                     exit()
 
-        # Set local project path
-        local_project_path = django_settings.SITE_ROOT
-
-        # Change into the local project folder
-        with hide('output', 'running', 'warnings'):
-            with lcd(local_project_path):
-                project_folder = local(
-                    "basename $( find {} -name 'wsgi.py' -not -path '*/.venv/*' -not -path '*/venv/*' | xargs -0 -n1 "
-                    "dirname )".format(
-                        local_project_path
-                    ), capture=True)
-
         with settings(warn_only=True):
             # Dump the database on the server.
-            sudo("su - {user} -c 'pg_dump {name} -cOx -U {db_user} -f /home/{name}/{name}.sql --clean'".format(
+            sudo("su - {user} -c 'pg_dump {name} -cOx -U {user} -f /home/{name}/{name}.sql --clean'".format(
                 name=config['remote']['database']['name'],
                 user=config['remote']['database']['user'],
             ))
@@ -54,7 +41,7 @@ class Command(BaseCommand):
             ))
 
             # Delete the file on the server.
-            run('rm /home/{db_user}/{db_name}.sql'.format(
+            run('rm /home/{}/{}.sql'.format(
                 config['remote']['database']['user'],
                 config['remote']['database']['name'],
             ))
@@ -76,5 +63,5 @@ class Command(BaseCommand):
 
             # Cleanup local files
             local('rm ~/{}.sql'.format(
-                name=config['local']['database']['name'],
+                config['local']['database']['name'],
             ))
