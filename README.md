@@ -149,3 +149,13 @@ The deploy script is the most complex command in the library, but saves many man
 * Post setup tasks:
 	* Dumps the local database, uploads it and imports it.
 	* Uploads the local media files to the remote server.
+
+	
+### PullDB
+* Dumps the database on the remote server to a SQL file.
+* Pulls the database file down the the local machine (using ``scp``).
+* Removes the file from the remote server.
+* Drops the local database (with ``dropdb``).
+* Creates the local database (with ``createdb``).
+* Imports the downloaded SQL file into the local database.
+* Removes the downloaded file.
