@@ -159,3 +159,7 @@ The deploy script is the most complex command in the library, but saves many man
 * Creates the local database (with ``createdb``).
 * Imports the downloaded SQL file into the local database.
 * Removes the downloaded file.
+
+### PullMedia
+* Ensures the media folder exists on the local machine, creating it if necessary.
+* Pulls down the remote uploads folder (using ``rsync``).
