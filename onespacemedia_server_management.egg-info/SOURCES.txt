@@ -1,7 +1,0 @@
-MANIFEST.in
-README.rst
-onespacemedia_server_management.egg-info/PKG-INFO
-onespacemedia_server_management.egg-info/SOURCES.txt
-onespacemedia_server_management.egg-info/dependency_links.txt
-onespacemedia_server_management.egg-info/top_level.txt
-server_management/__init__.py
