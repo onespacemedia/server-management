@@ -170,3 +170,6 @@ The deploy script is the most complex command in the library, but saves many man
 * Imports the SQL file into the remote database.
 * Removes the SQL file from the remote server.
 * Removes the SQL file from the local machine.
+
+### PushMedia
+* Pushes up the local uploads folder to the remote server (using ``rsync``)
