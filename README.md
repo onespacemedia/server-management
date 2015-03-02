@@ -28,7 +28,7 @@ The commands are all wrappers around [Ansible's](/ansible/ansible) [Python API](
 
 To install ``server-management`` simply run:
 
-    $ pip install server-management
+    $ pip install onespacemedia-server-management
     
 ## Configuration
 
