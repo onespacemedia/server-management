@@ -41,7 +41,7 @@ class Command(BaseCommand):
                     ), capture=True)
 
         with settings(warn_only=True):
-            local('rsync -rh {}/uploads/ root@{}:/var/www/{}_media/uploads/'.format(
+            local('rsync -rh {} root@{}:/var/www/{}_media'.format(
                 django_settings.MEDIA_ROOT,
                 env.host_string,
                 project_folder,

@@ -29,11 +29,9 @@ class Command(BaseCommand):
         # Change into the local project folder
         with hide('output', 'running', 'warnings'):
             with lcd(local_project_path):
-                project_folder = local(
-                    "basename $( find {} -name 'wsgi.py' -not -path '*/.venv/*' -not -path '*/venv/*' | xargs -0 -n1 "
-                    "dirname )".format(
-                        local_project_path
-                    ), capture=True)
+                project_folder = local("basename $( find {} -name 'wsgi.py' -not -path '*/.venv/*' -not -path '*/venv/*' | xargs -0 -n1 dirname )".format(
+                    local_project_path
+                ), capture=True)
 
         with settings(warn_only=True):
             local('mkdir -p {}/uploads/'.format(
@@ -44,7 +42,7 @@ class Command(BaseCommand):
                 django_settings.STATIC_ROOT
             ))
 
-            local('rsync -rh root@{}:/var/www/{}_media/uploads/ {}/uploads/'.format(
+            local('rsync -rh root@{}:/var/www/{}_media {}'.format(
                 env.host_string,
                 project_folder,
                 django_settings.MEDIA_ROOT
