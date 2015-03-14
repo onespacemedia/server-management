@@ -660,7 +660,7 @@ class Command(BaseCommand):
 
             # Create uploads folder
             print "[\033[95mTASK\033[0m] Create uploads folder..."
-            local('mkdir -p {}/uploads/'.format(
+            local('mkdir -p {}'.format(
                 django_settings.MEDIA_ROOT
             ))
             print "[\033[95mTASK\033[0m] [\033[92mDONE\033[0m]"
@@ -668,11 +668,11 @@ class Command(BaseCommand):
 
             # Sync local files up to the server
             print "[\033[95mTASK\033[0m] Push local uploads to the server..."
-            local('rsync -rhe "ssh -o StrictHostKeyChecking=no" {}/uploads/ {}@{}:{}'.format(
+            local('rsync -rhe "ssh -o StrictHostKeyChecking=no" {} {}@{}:{}'.format(
                 django_settings.MEDIA_ROOT,
                 'root',
                 config['remote']['server']['ip'],
-                '/var/www/{}_media/uploads/'.format(
+                '/var/www/{}_media'.format(
                     project_folder
                 )
             ))
