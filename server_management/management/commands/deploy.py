@@ -66,7 +66,7 @@ class Command(BaseCommand):
         # Print some information for the user
         print ""
         print "Project: {}".format(project_folder)
-        print "Server ip: {}".format(env.host_string)
+        print "Server IP: {}".format(env.host_string)
         print "Server user: {}".format(env.user)
         print ""
 
@@ -80,7 +80,6 @@ class Command(BaseCommand):
         session_files = {
             'pgpass': NamedTemporaryFile(delete=False),
             'gunicorn_start': NamedTemporaryFile(delete=False),
-            'maintenance_off': NamedTemporaryFile(delete=False),
             'supervisor_config': NamedTemporaryFile(delete=False),
             'nginx_site_config': NamedTemporaryFile(delete=False),
         }
@@ -93,9 +92,6 @@ class Command(BaseCommand):
             'project': project_folder
         }))
         session_files['gunicorn_start'].close()
-
-        session_files['maintenance_off'].write(render_to_string('maintenance_off', {}))
-        session_files['maintenance_off'].close()
 
         session_files['supervisor_config'].write(render_to_string('supervisor_config', {
             'project': project_folder
@@ -126,17 +122,12 @@ class Command(BaseCommand):
                 },
                 'with_items': [
                     'build-essential',
-                    'htop',
                     'git',
                     'python-dev',
                     'python-pip',
-                    'python-pycurl',
-                    'python-httplib2',
                     'supervisor',
-                    'openjdk-6-jre-headless',
                     'libjpeg-dev',
                     'libffi-dev',
-                    'ruby-dev',
                     'npm'
                 ]
             },
@@ -159,13 +150,6 @@ class Command(BaseCommand):
                 'ansible_arguments': {
                     'module_name': 'npm',
                     'module_args': 'name=gulp global=yes'
-                }
-            },
-            {
-                'title': "Install compass",
-                'ansible_arguments': {
-                    'module_name': 'gem',
-                    'module_args': 'name=compass state=latest user_install=no'
                 }
             },
             {
@@ -257,15 +241,6 @@ class Command(BaseCommand):
                         config['remote']['database']['name']
                     ),
                     'sudo_user': 'postgres'
-                }
-            },
-            {
-                'title': "Make a .pgpass file",
-                'ansible_arguments': {
-                    'module_name': 'copy',
-                    'module_args': 'src={} dest=~/.pgpass owner=root mode=0600 force=yes'.format(
-                        session_files['pgpass'].name
-                    )
                 }
             },
         ]
@@ -435,16 +410,6 @@ class Command(BaseCommand):
                     'module_name': 'file',
                     'module_args': 'path=/var/log/gunicorn_supervisor.log owner={} group=webapps mode=0664 '
                                    'state=file'.format(
-                        project_folder
-                    )
-                }
-            },
-            {
-                'title': "Create the maintenance page",
-                'ansible_arguments': {
-                    'module_name': 'copy',
-                    'module_args': 'src={} dest=/var/www/{}/.venv/maintenance_off.html mode=0664'.format(
-                        session_files['maintenance_off'].name,
                         project_folder
                     )
                 }
