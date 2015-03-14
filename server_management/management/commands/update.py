@@ -51,7 +51,9 @@ class Command(BaseCommand):
 
                         run('git pull')
 
-                        run('pip install -r requirements.txt')
+                        run('[[ -e requirements.txt ]] && pip install -r requirements.txt')
+
+                        run('[[ -e Gulpfile.js ]] && gulp styles')
 
                         sudo('./manage.py collectstatic -l --noinput', user=project_folder)
 

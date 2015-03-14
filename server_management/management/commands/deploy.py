@@ -136,8 +136,30 @@ class Command(BaseCommand):
                     'openjdk-6-jre-headless',
                     'libjpeg-dev',
                     'libffi-dev',
-                    'ruby-dev'
+                    'ruby-dev',
+                    'npm'
                 ]
+            },
+            {
+                'title': 'Symlink Node.js',
+                'ansible_arguments': {
+                    'module_name': 'file',
+                    'module_args': 'src=/usr/bin/nodejs dest=/usr/bin/node state=link'
+                }
+            },
+            {
+                'title': 'Install bower with npm',
+                'ansible_arguments': {
+                    'module_name': 'npm',
+                    'module_args': 'name=bower global=yes'
+                }
+            },
+            {
+                'title': 'Install gulp with npm',
+                'ansible_arguments': {
+                    'module_name': 'npm',
+                    'module_args': 'name=gulp global=yes'
+                }
             },
             {
                 'title': "Install compass",
@@ -491,6 +513,24 @@ class Command(BaseCommand):
                     )
                 }
             },
+            {
+                'title': 'Install npm packages',
+                'ansible_arguments': {
+                    'module_name': 'npm',
+                    'module_args': 'path=/var/www/{project}'.format(
+                        project=project_folder
+                    )
+                }
+            },
+            {
+                'title': 'Compile CSS',
+                'ansible_arguments': {
+                    'module_name': 'shell',
+                    'module_args': 'gulp styles chdir=/var/www/{project}'.format(
+                        project=project_folder,
+                    )
+                }
+            }
         ]
 
         run_tasks(env.host_string, requirement_tasks)
