@@ -128,7 +128,8 @@ class Command(BaseCommand):
                     'supervisor',
                     'libjpeg-dev',
                     'libffi-dev',
-                    'npm'
+                    'npm',
+                    'memcached',
                 ]
             },
             {
