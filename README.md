@@ -1,6 +1,6 @@
-# server-management
+# onespacemedia-server-management
 
-``server-management`` allows for very simple deployment and day-to-day management of Django projects.  Primarily used and maintained by the team at [Onespacemedia](http://www.onespacemedia.com/), but should work for most people.  It allows you to deploy a Django application, preferably onto a Ubuntu or Debian server, and maintain the application over time.
+``onespacemedia-server-management`` allows for very simple deployment and day-to-day management of Django projects.  Primarily used and maintained by the team at [Onespacemedia](http://www.onespacemedia.com/), but should work for most people.  It allows you to deploy a Django application, preferably onto a Ubuntu or Debian server, and maintain the application over time.
 
 The commands are all wrappers around [Ansible's](/ansible/ansible) [Python API](http://docs.ansible.com/developing_api.html) with the tasks themselves ported over from real cookbooks. The calls are made using a combination of Fabric and custom code.
 
@@ -26,13 +26,13 @@ The commands are all wrappers around [Ansible's](/ansible/ansible) [Python API](
 
 ## Installation
 
-To install ``server-management`` simply run:
+To install ``onespacemedia-server-management`` simply run:
 
     $ pip install onespacemedia-server-management
     
 ## Configuration
 
-We need to add ``server-management`` to our project, so add ``server_management`` to your ``INSTALLED_APPS``.
+We need to add ``onespacemedia-server-management`` to our project, so add ``server_management`` to your ``INSTALLED_APPS``.
 
     INSTALLED_APPS = [
         ...
@@ -69,7 +69,7 @@ Update your ``STATIC_ROOT`` and ``MEDIA_ROOT`` to match the format the scripts e
 
 ## Usage
 
-Once ``server-management`` has been added to your project you will have access to a number of ``manage.py`` commands, they are currently as follows:
+Once ``onespacemedia-server-management`` has been added to your project you will have access to a number of ``manage.py`` commands, they are currently as follows:
 
 * [``deploy``](#deploy)
 * [``pulldb``](#pulldb)
