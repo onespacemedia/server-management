@@ -17,7 +17,7 @@ The commands are all wrappers around [Ansible's](/ansible/ansible) [Python API](
 
 * This project currently makes the assumption that your code is hosted on BitBucket.  However, the code can be very easily updated to support generic Git hosts, pull requests are welcomed for this.
 * The code takes database credentials from a file on disk, so projects using configuration data stored in environment variables are not currently supported.
-* The application stack consists of Nginx, Supervisor, Gunicorn and PostgreSQL.
+* The application stack consists of Nginx, Supervisor, Gunicorn, Memcached and PostgreSQL.
 * The deployment process will deploy all services onto one machine, it does not support splitting services across multiple machines, though as we're using Ansible it could be possible in the future.
 * Your project is expected to use a virtual environment, with the folder in the same directory as the ``manage.py`` file, and be named ``venv`` or ``.venv``.
 * The deploy script currently logs in as root and installs the base packages as root. The application, PostgreSQL server and Supervisor all run under their own users.
@@ -93,18 +93,15 @@ The deploy script is the most complex command in the library, but saves many man
 	* Update the apt-cache.
 	* Installs a set of base packages via apt-get:
 	    * ``build-essential``
-	    * ``htop``
 	    * ``git``
 	    * ``python-dev``
 	    * ``python-pip``
-	    * ``python-pycurl``
-	    * ``python-httplib2``
 	    * ``supervisor``
-	    * ``openjdk-6-jre-headless``
 	    * ``libjpeg-dev``
-	    * ``libffi-dev``
-	    * ``ruby-dev``
-	* Installs ``compass`` as a ruby gem.
+	    * ``npm``
+	    * ``memcached``
+	* Installs ``bower`` with ``npm``.
+	* Installs ``gulp`` with ``npm``.
 	* Generates a SSH key.
 	* Installs ``virtualenv`` with pip.
 * PostgreSQL actions:
@@ -120,7 +117,6 @@ The deploy script is the most complex command in the library, but saves many man
 	* Creates the database user.
 	* Adds the database user to the database.
 	* Ensures the database user doesn't have unnecessary privileges.
-	* Makes ``.pgpass`` file. (Note: This may no longer be required.)
 * Application tasks:
 	* Creates a group (named ``webapps``) for the application user.
 	* Creates a user (with the name being your application name) and adds it to the ``webapps`` group.
@@ -131,11 +127,12 @@ The deploy script is the most complex command in the library, but saves many man
 	* Creates a virtual environment in the project directory.
 	* Uploads the Gunicorn file that we made earlier.
 	* Creates a log file for Supervisor and Gunicorn with the correct permissions.
-	* Uploads the nginx ``maintenance_off`` file (removing this file will make nginx show a maintenance page).
 	* Installs the project requirements from the ``requirements.txt`` file (if you have one).
 	* Installs Gunicorn into the project.
 	* Runs ``collectstatic``, making symlinks into the static folder.
 	* Updates the permissions of the media folder.
+	* Installs ``npm`` packages.
+	* Compiles CSS (using ``gulp``).
 	* Creates a ``run`` folder for Supervisor.
 	* Ensures the ``.venv`` folder has the correct permissions.
 * Nginx tasks:
