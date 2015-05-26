@@ -7,6 +7,7 @@ from _core import load_config
 
 
 class Command(BaseCommand):
+
     def handle(self, *args, **options):
         # Load server config from project
         config = load_config()
@@ -76,3 +77,16 @@ class Command(BaseCommand):
 
                         run('supervisorctl restart {}'.format(project_folder))
                         run('chown {}:webapps -R /var/www/*'.format(project_folder))
+
+        # Register the release with Opbeat.
+        if 'opbeat' in config:
+            with(lcd(local_project_path)):
+                local('curl https://intake.opbeat.com/api/v1/organizations/{}/apps/{}/releases/'
+                      ' -H "Authorization: Bearer {}"'
+                      ' -d rev=`git log -n 1 --pretty=format:%H`'
+                      ' -d branch=`git rev-parse --abbrev-ref HEAD`'
+                      ' -d status=completed'.format(
+                          config['opbeat']['organization_id'],
+                          config['opbeat']['app_id'],
+                          config['opbeat']['secret_token'],
+                      ))
