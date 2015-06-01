@@ -42,7 +42,7 @@ class Command(BaseCommand):
                 django_settings.STATIC_ROOT
             ))
 
-            local('rsync -rh --exclude "assets/" root@{}:/var/www/{}_media {}'.format(
+            local('rsync -rh --exclude "assets/" root@{}:/var/www/{}_media/ {}'.format(
                 env.host_string,
                 project_folder,
                 django_settings.MEDIA_ROOT
