@@ -14,6 +14,7 @@ from _core import load_config, ansible_task, run_tasks, check_request
 
 
 class Command(BaseCommand):
+
     def handle(self, *args, **options):
         # Load server config from project
         config = load_config()
@@ -179,8 +180,8 @@ class Command(BaseCommand):
                     'module_args': 'name={item} force=yes state=present'
                 },
                 'with_items': [
-                    'postgresql-9.3',
-                    'postgresql-contrib-9.3',
+                    'postgresql-9.4',
+                    'postgresql-contrib-9.4',
                     'libpq-dev',
                     'python-psycopg2',
                     'pgtune'
@@ -197,17 +198,17 @@ class Command(BaseCommand):
                 'title': "Backuping Postgresql main config file",
                 'ansible_arguments': {
                     'module_name': 'command',
-                    'module_args': 'mv /etc/postgresql/9.3/main/postgresql.conf '
-                                   '/etc/postgresql/9.3/main/postgresql.conf.old '
-                                   'creates=/etc/postgresql/9.3/main/postgresql.conf.old'
+                    'module_args': 'mv /etc/postgresql/9.4/main/postgresql.conf '
+                                   '/etc/postgresql/9.4/main/postgresql.conf.old '
+                                   'creates=/etc/postgresql/9.4/main/postgresql.conf.old'
                 }
             },
             {
                 'title': "Setting Postgresql Optmizing via pgtune",
                 'ansible_arguments': {
                     'module_name': 'command',
-                    'module_args': 'pgtune -i /etc/postgresql/9.3/main/postgresql.conf.old -o '
-                                   '/etc/postgresql/9.3/main/postgresql.conf --type=Web',
+                    'module_args': 'pgtune -i /etc/postgresql/9.4/main/postgresql.conf.old -o '
+                                   '/etc/postgresql/9.4/main/postgresql.conf --type=Web',
                     'sudo_user': 'postgres'
                 }
             },
@@ -217,8 +218,8 @@ class Command(BaseCommand):
                     'module_name': 'postgresql_db',
                     'module_args': "name='{}' encoding='UTF-8' lc_collate='en_GB.UTF-8' lc_ctype='en_GB.UTF-8' "
                                    "template='template0' state=present".format(
-                        config['remote']['database']['name']
-                    ),
+                                       config['remote']['database']['name']
+                                   ),
                     'sudo_user': 'postgres'
                 }
             },
@@ -374,8 +375,8 @@ class Command(BaseCommand):
                     'module_name': 'command',
                     'module_args': 'virtualenv /var/www/{project}/.venv --no-site-packages creates=/var/www/{'
                                    'project}/.venv'.format(
-                        project=project_folder
-                    )
+                                       project=project_folder
+                                   )
                 }
             },
             {
@@ -384,9 +385,9 @@ class Command(BaseCommand):
                     'module_name': 'copy',
                     'module_args': 'src={file} dest=/var/www/{project}/.venv/bin/gunicorn_start owner={project} '
                                    'group=webapps mode=0755 backup=yes'.format(
-                        file=session_files['gunicorn_start'].name,
-                        project=project_folder
-                    )
+                                       file=session_files['gunicorn_start'].name,
+                                       project=project_folder
+                                   )
                 }
             },
             {
@@ -411,8 +412,8 @@ class Command(BaseCommand):
                     'module_name': 'file',
                     'module_args': 'path=/var/log/gunicorn_supervisor.log owner={} group=webapps mode=0664 '
                                    'state=file'.format(
-                        project_folder
-                    )
+                                       project_folder
+                                   )
                 }
             },
         ]
@@ -443,8 +444,8 @@ class Command(BaseCommand):
                         'module_name': 'pip',
                         'module_args': 'virtualenv=/var/www/{project}/.venv requirements=/var/www/{'
                                        'project}/requirements.txt'.format(
-                            project=project_folder
-                        )
+                                           project=project_folder
+                                       )
                     }
                 }
             )
@@ -466,8 +467,8 @@ class Command(BaseCommand):
                     'module_name': 'django_manage',
                     'module_args': 'command=collectstatic app_path=/var/www/{project} virtualenv=/var/www/{'
                                    'project}/.venv link=yes settings={project}.settings.production'.format(
-                        project=project_folder
-                    )
+                                       project=project_folder
+                                   )
                 }
             },
             {
@@ -521,8 +522,8 @@ class Command(BaseCommand):
                     'module_name': 'file',
                     'module_args': 'path=/var/www/{project}/.venv recurse=yes owner={project} group=webapps '
                                    'state=directory'.format(
-                        project=project_folder
-                    )
+                                       project=project_folder
+                                   )
                 }
             }
         ]
@@ -560,8 +561,8 @@ class Command(BaseCommand):
                     'module_name': 'command',
                     'module_args': 'ln -s /etc/nginx/sites-available/{project} /etc/nginx/sites-enabled/{project} '
                                    'creates=/etc/nginx/sites-enabled/{project}'.format(
-                        project=project_folder
-                    )
+                                       project=project_folder
+                                   )
                 }
             },
             {
