@@ -109,10 +109,10 @@ class Command(BaseCommand):
         # Define base tasks
         base_tasks = [
             {
-                'title': "Upgrade everything",
+                'title': "Update apt cache and upgrade everything",
                 'ansible_arguments': {
                     'module_name': 'apt',
-                    'module_args': 'update_cache=yes'
+                    'module_args': 'update_cache=yes upgrade=yes'
                 }
             },
             {
