@@ -14,7 +14,7 @@ class Command(BaseCommand):
 
         # Define current host from settings in server config
         env.host_string = config['remote']['server']['ip']
-        env.user = 'root'
+        env.user = 'deploy'
         env.disable_known_hosts = True
         env.reject_unknown_hosts = False
 
@@ -48,13 +48,14 @@ class Command(BaseCommand):
 
                 with virtualenv(venv):
                     with shell_env(DJANGO_SETTINGS_MODULE="{}.settings.production".format(project_folder)):
-                        run('chown {}:webapps -R /var/www/*'.format(project_folder))
+                        sudo('chown {}:webapps -R /var/www/*'.format(project_folder))
+                        sudo('chmod 775 -R /var/www/'.format(project_folder))
 
                         run('git pull')
 
                         run('[[ -e requirements.txt ]] && pip install -r requirements.txt')
 
-                        run('[[ -e Gulpfile.js ]] && gulp styles')
+                        sudo('[[ -e Gulpfile.js ]] && gulp styles')
 
                         sudo('./manage.py collectstatic -l --noinput', user=project_folder)
 
@@ -75,8 +76,9 @@ class Command(BaseCommand):
                         if watson:
                             sudo('./manage.py buildwatson', user=project_folder)
 
-                        run('supervisorctl restart {}'.format(project_folder))
-                        run('chown {}:webapps -R /var/www/*'.format(project_folder))
+                        sudo('supervisorctl restart {}'.format(project_folder))
+                        sudo('chown {}:webapps -R /var/www/*'.format(project_folder))
+                        sudo('chmod 775 -R /var/www/'.format(project_folder))
 
         # Register the release with Opbeat.
         if 'opbeat' in config and config['opbeat']['app_id'] and config['opbeat']['secret_token']:
