@@ -53,8 +53,7 @@ class Command(BaseCommand):
                         bitbucket_repo = bb_regex.group(2)
 
                 project_folder = local(
-                    "basename $( find {} -name 'wsgi.py' -not -path '*/.venv/*' -not -path '*/venv/*' | xargs -0 -n1 "
-                    "dirname )".format(
+                    "basename $( find {} -name 'wsgi.py' -not -path '*/.venv/*' -not -path '*/venv/*' | xargs -0 -n1 dirname )".format(
                         local_project_path
                     ), capture=True)
 
