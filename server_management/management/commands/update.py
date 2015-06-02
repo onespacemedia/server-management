@@ -79,7 +79,7 @@ class Command(BaseCommand):
                         run('chown {}:webapps -R /var/www/*'.format(project_folder))
 
         # Register the release with Opbeat.
-        if 'opbeat' in config:
+        if 'opbeat' in config and config['opbeat']['app_id'] and config['opbeat']['secret_token']:
             with(lcd(local_project_path)):
                 local('curl https://intake.opbeat.com/api/v1/organizations/{}/apps/{}/releases/'
                       ' -H "Authorization: Bearer {}"'
