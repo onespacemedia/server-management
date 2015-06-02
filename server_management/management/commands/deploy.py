@@ -187,21 +187,93 @@ class Command(BaseCommand):
                 }
             },
             {
-                'title': "Generate SSH key",
-                'ansible_arguments': {
-                    'module_name': 'user',
-                    'module_args': 'name=root generate_ssh_key=yes ssh_key_bits=2048'
-                }
-            },
-            {
                 'title': "Install virtualenv",
                 'ansible_arguments': {
                     'module_name': 'pip',
                     'module_args': 'name=virtualenv'
                 }
-            },
+            }
         ]
         run_tasks(env.host_string, base_tasks)
+
+        # Define SSH tasks
+        ssh_tasks = [
+            {
+                'title': 'Install fail2ban',
+                'ansible_arguments': {
+                    'module_name': 'apt',
+                    'module_args': 'name={item} state=present'
+                },
+                'with_items': [
+                    'fail2ban'
+                ]
+            },
+            {
+                'title': "Create the application group",
+                'ansible_arguments': {
+                    'module_name': 'group',
+                    'module_args': 'name=webapps system=yes state=present'
+                }
+            },
+            {
+                'title': 'Add deploy user',
+                'ansible_arguments': {
+                    'module_name': 'user',
+                    'module_args': 'name=deploy group=webapps generate_ssh_key=yes shell=/bin/bash'
+                }
+            },
+            {
+                'title': "Add authorized keys",
+                'ansible_arguments': {
+                    'module_name': 'command',
+                    'module_args': 'mv /root/.ssh/authorized_keys /home/deploy/.ssh/authorized_keys '
+                                   'creates=/home/deploy/.ssh/authorized_keys'
+                }
+            },
+            {
+                'title': 'Fix file permissions of deploy authorized keys',
+                'ansible_arguments': {
+                    'module_name': 'file',
+                    'module_args': 'path=/home/deploy/.ssh/authorized_keys owner=deploy group=webapps'
+                }
+            },
+            {
+                'title': 'Remove sudo group rights',
+                'ansible_arguments': {
+                    'module_name':  'lineinfile',
+                    'module_args': 'dest=/etc/sudoers regexp="^%sudo" state=absent'
+                }
+            },
+            {
+                'title': 'Add deploy user to sudoers',
+                'ansible_arguments': {
+                    'module_name':  'lineinfile',
+                    'module_args': 'dest=/etc/sudoers regexp="deploy ALL" line="deploy ALL=(ALL:ALL) NOPASSWD: ALL" state=present'
+                }
+            },
+            {
+                'title': 'Disallow root SSH access',
+                'ansible_arguments': {
+                    'module_name':  'lineinfile',
+                    'module_args': 'dest=/etc/ssh/sshd_config regexp="^PermitRootLogin" line="PermitRootLogin no" state=present'
+                }
+            },
+            {
+                'title': 'Disallow password authentication',
+                'ansible_arguments': {
+                    'module_name':  'lineinfile',
+                    'module_args': 'dest=/etc/ssh/sshd_config regexp="^PasswordAuthentication" line="PasswordAuthentication no" state=present'
+                }
+            },
+            {
+                'title': 'Restart SSH',
+                'ansible_arguments': {
+                    'module_name': 'service',
+                    'module_args': 'name=ssh state=restarted'
+                }
+            }
+        ]
+        run_tasks(env.host_string, ssh_tasks)
 
         # Define db tasks
         db_tasks = [
@@ -283,13 +355,6 @@ class Command(BaseCommand):
         # Define web tasks
         web_tasks = [
             {
-                'title': "Create the application group",
-                'ansible_arguments': {
-                    'module_name': 'group',
-                    'module_args': 'name=webapps system=yes state=present'
-                }
-            },
-            {
                 'title': "Add the application user to the application group",
                 'ansible_arguments': {
                     'module_name': 'user',
@@ -298,6 +363,16 @@ class Command(BaseCommand):
                     )
                 }
             },
+            {
+                'title': "Create the project directory",
+                'ansible_arguments': {
+                    'module_name': 'file',
+                    'module_args': 'path=/var/www/{} owner={} group=webapps mode=0775 state=directory'.format(
+                        project_folder,
+                        project_folder,
+                    )
+                }
+            }
         ]
         run_tasks(env.host_string, web_tasks)
 
@@ -306,13 +381,12 @@ class Command(BaseCommand):
         ssh_key_request = ansible_task(
             env.host_string,
             module_name='shell',
-            module_args='cat ~/.ssh/id_rsa.pub'
+            module_args='cat /home/deploy/.ssh/id_rsa.pub'
         )
         check_request(ssh_key_request, env.host_string, "TASK")
         ssh_key = ssh_key_request['contacted'][env.host_string]['stdout']
 
         print ""
-
         # Get the current SSH keys in the repo
         print "[\033[95mTASK\033[0m] Checking bitbucket repository for an existing SSH key..."
         try:
@@ -364,7 +438,8 @@ class Command(BaseCommand):
                         "/var/www/{}".format(
                             project_folder
                         )
-                    )
+                    ),
+                    'sudo_user': 'deploy'
                 }
             },
         ]
@@ -376,7 +451,7 @@ class Command(BaseCommand):
                 'title': "Make the static directory",
                 'ansible_arguments': {
                     'module_name': 'file',
-                    'module_args': 'path={} state=directory owner={} recurse=yes'.format(
+                    'module_args': 'path={} state=directory owner={} group=webapps mode=0775 recurse=yes'.format(
                         "/var/www/{}_static/".format(
                             project_folder
                         ),
@@ -388,7 +463,7 @@ class Command(BaseCommand):
                 'title': "Make the media directory",
                 'ansible_arguments': {
                     'module_name': 'file',
-                    'module_args': 'path={} state=directory owner={} recurse=yes'.format(
+                    'module_args': 'path={} state=directory owner={} group=webapps mode=0775 recurse=yes'.format(
                         "/var/www/{}_media/".format(
                             project_folder
                         ),
@@ -667,9 +742,14 @@ class Command(BaseCommand):
 
             # Sync local files up to the server
             print "[\033[95mTASK\033[0m] Push local uploads to the server..."
-            local('rsync -rhe "ssh -o StrictHostKeyChecking=no" {} {}@{}:{}'.format(
+            # Ensure the local media folder exists.
+            local('mkdir -p {}'.format(
                 django_settings.MEDIA_ROOT,
-                'root',
+            ))
+
+            local('rsync -rhe "ssh -o StrictHostKeyChecking=no" {}/ {}@{}:{}/'.format(
+                django_settings.MEDIA_ROOT,
+                'deploy',
                 config['remote']['server']['ip'],
                 '/var/www/{}_media'.format(
                     project_folder
@@ -682,7 +762,7 @@ class Command(BaseCommand):
             print "[\033[95mTASK\033[0m] Push local database to the server..."
             local('scp ~/{}-final-dump.sql {}@{}:/tmp/{}.sql'.format(
                 config['local']['database']['name'],
-                'root',
+                'deploy',
                 config['remote']['server']['ip'],
                 config['remote']['database']['name'],
             ))
