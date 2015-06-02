@@ -21,5 +21,5 @@ setup(
     url='https://github.com/onespacemedia/server-management/',
     author='James Foley',
     author_email='jamesfoley@onespacemedia.com',
-    install_requires=['django', 'fabric', 'ansible', 'requests', 'fabric-virtualenv'],
+    install_requires=['django', 'fabric', 'ansible==1.8.4', 'requests', 'fabric-virtualenv'],
 )
