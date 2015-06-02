@@ -71,8 +71,13 @@ class Command(BaseCommand):
         print ""
 
         # Get bitbucket details
-        bitbucket_username = prompt("Please enter your BitBucket username:")
-        bitbucket_password = getpass("Please enter your BitBucket password: ")
+
+        if os.environ.get('BITBUCKET_USERNAME', False) and os.environ.get('BITBUCKET_PASSWORD', False):
+            bitbucket_username = os.environ.get('BITBUCKET_USERNAME')
+            bitbucket_password = os.environ.get('BITBUCKET_PASSWORD')
+        else:
+            bitbucket_username = prompt("Please enter your BitBucket username:")
+            bitbucket_password = getpass("Please enter your BitBucket password: ")
 
         print ""
 
