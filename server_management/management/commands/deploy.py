@@ -61,7 +61,7 @@ class Command(BaseCommand):
         domain_names = " ".join(django_settings.ALLOWED_HOSTS)
 
         # Use the site domain as a fallback domain
-        fallback_domain_name = django_settings.SITE_DOMAIN
+        fallback_domain_name = raw_input("What should the default domain be? ({})".format(django_settings.SITE_DOMAIN)) or django_settings.SITE_DOMAIN
 
         # Print some information for the user
         print ""
