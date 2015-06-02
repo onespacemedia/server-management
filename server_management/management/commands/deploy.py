@@ -87,6 +87,7 @@ class Command(BaseCommand):
             'gunicorn_start': NamedTemporaryFile(delete=False),
             'supervisor_config': NamedTemporaryFile(delete=False),
             'nginx_site_config': NamedTemporaryFile(delete=False),
+            'apt_periodic': NamedTemporaryFile(delete=False),
         }
 
         # Parse files
@@ -110,6 +111,9 @@ class Command(BaseCommand):
         }))
         session_files['nginx_site_config'].close()
 
+        session_files['apt_periodic'].write(render_to_string('apt_periodic'))
+        session_files['apt_periodic'].close()
+
         # Define base tasks
         base_tasks = [
             {
@@ -117,6 +121,29 @@ class Command(BaseCommand):
                 'ansible_arguments': {
                     'module_name': 'apt',
                     'module_args': 'update_cache=yes upgrade=yes'
+                }
+            },
+            {
+                'title': 'Install unattended-upgrades',
+                'ansible_arguments': {
+                    'module_name': 'apt',
+                    'module_args': 'pkg=unattended-upgrades state=present'
+                }
+            },
+            {
+                'title': 'Adjust APT update intervals',
+                'ansible_arguments': {
+                    'module_name': 'copy',
+                    'module_args': 'src={} dest=/etc/apt/apt.conf.d/10periodic'.format(
+                        session_files['apt_periodic'].name,
+                    )
+                }
+            },
+            {
+                'title': 'Make sure unattended-upgrades only installs from $ubuntu_release-security',
+                'ansible_arguments': {
+                    'module_name':  'lineinfile',
+                    'module_args': 'dest=/etc/apt/apt.conf.d/50unattended-upgrades regexp="$ubuntu_release-updates" state=absent'
                 }
             },
             {
