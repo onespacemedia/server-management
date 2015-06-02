@@ -284,8 +284,8 @@ class Command(BaseCommand):
                     'module_args': 'name={item} force=yes state=present'
                 },
                 'with_items': [
-                    'postgresql-9.4',
-                    'postgresql-contrib-9.4',
+                    'postgresql-9.3',
+                    'postgresql-contrib-9.3',
                     'libpq-dev',
                     'python-psycopg2',
                     'pgtune'
@@ -299,20 +299,20 @@ class Command(BaseCommand):
                 }
             },
             {
-                'title': "Backuping Postgresql main config file",
+                'title': "Backuping PostgreSQL main config file",
                 'ansible_arguments': {
                     'module_name': 'command',
-                    'module_args': 'mv /etc/postgresql/9.4/main/postgresql.conf '
-                                   '/etc/postgresql/9.4/main/postgresql.conf.old '
-                                   'creates=/etc/postgresql/9.4/main/postgresql.conf.old'
+                    'module_args': 'mv /etc/postgresql/9.3/main/postgresql.conf '
+                                   '/etc/postgresql/9.3/main/postgresql.conf.old '
+                                   'creates=/etc/postgresql/9.3/main/postgresql.conf.old'
                 }
             },
             {
-                'title': "Setting Postgresql Optmizing via pgtune",
+                'title': "Optimising PostgreSQL via pgtune",
                 'ansible_arguments': {
                     'module_name': 'command',
-                    'module_args': 'pgtune -i /etc/postgresql/9.4/main/postgresql.conf.old -o '
-                                   '/etc/postgresql/9.4/main/postgresql.conf --type=Web',
+                    'module_args': 'pgtune -i /etc/postgresql/9.3/main/postgresql.conf.old -o '
+                                   '/etc/postgresql/9.3/main/postgresql.conf --type=Web',
                     'sudo_user': 'postgres'
                 }
             },
