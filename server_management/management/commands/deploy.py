@@ -162,6 +162,7 @@ class Command(BaseCommand):
                     'libffi-dev',
                     'npm',
                     'memcached',
+                    'libgeoip-dev',
                 ]
             },
             {
