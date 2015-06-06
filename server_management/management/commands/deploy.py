@@ -494,7 +494,7 @@ class Command(BaseCommand):
                 'title': "Create the Gunicorn script file",
                 'ansible_arguments': {
                     'module_name': 'copy',
-                    'module_args': 'src={file} dest=/var/www/{project}/.venv/bin/gunicorn_start owner={project} group=webapps mode=0755 backup=yes'.format(
+                    'module_args': 'src={file} dest=/var/www/{project}/gunicorn_start owner={project} group=webapps mode=0755 backup=yes'.format(
                         file=session_files['gunicorn_start'].name,
                         project=project_folder
                     )
