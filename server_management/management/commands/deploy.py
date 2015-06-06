@@ -485,8 +485,7 @@ class Command(BaseCommand):
                 'title': "Create the virtualenv",
                 'ansible_arguments': {
                     'module_name': 'command',
-                    'module_args': 'virtualenv /var/www/{project}/.venv --no-site-packages creates=/var/www/{'
-                                   'project}/.venv'.format(
+                    'module_args': 'virtualenv /var/www/{project}/.venv --no-site-packages creates=/var/www/{project}/.venv'.format(
                                        project=project_folder
                                    )
                 }
@@ -495,11 +494,10 @@ class Command(BaseCommand):
                 'title': "Create the Gunicorn script file",
                 'ansible_arguments': {
                     'module_name': 'copy',
-                    'module_args': 'src={file} dest=/var/www/{project}/.venv/bin/gunicorn_start owner={project} '
-                                   'group=webapps mode=0755 backup=yes'.format(
-                                       file=session_files['gunicorn_start'].name,
-                                       project=project_folder
-                                   )
+                    'module_args': 'src={file} dest=/var/www/{project}/.venv/bin/gunicorn_start owner={project} group=webapps mode=0755 backup=yes'.format(
+                        file=session_files['gunicorn_start'].name,
+                        project=project_folder
+                    )
                 }
             },
             {
@@ -522,10 +520,9 @@ class Command(BaseCommand):
                 'title': "Set permission to the application log file",
                 'ansible_arguments': {
                     'module_name': 'file',
-                    'module_args': 'path=/var/log/gunicorn_supervisor.log owner={} group=webapps mode=0664 '
-                                   'state=file'.format(
-                                       project_folder
-                                   )
+                    'module_args': 'path=/var/log/gunicorn_supervisor.log owner={} group=webapps mode=0664 state=file'.format(
+                        project_folder
+                    )
                 }
             },
         ]
@@ -554,10 +551,9 @@ class Command(BaseCommand):
                     'title': "Install packages required by the Django app inside virtualenv",
                     'ansible_arguments': {
                         'module_name': 'pip',
-                        'module_args': 'virtualenv=/var/www/{project}/.venv requirements=/var/www/{'
-                                       'project}/requirements.txt'.format(
-                                           project=project_folder
-                                       )
+                        'module_args': 'virtualenv=/var/www/{project}/.venv requirements=/var/www/{project}/requirements.txt'.format(
+                            project=project_folder
+                        )
                     }
                 }
             )
@@ -577,10 +573,9 @@ class Command(BaseCommand):
                 'title': "Collect static files",
                 'ansible_arguments': {
                     'module_name': 'django_manage',
-                    'module_args': 'command=collectstatic app_path=/var/www/{project} virtualenv=/var/www/{'
-                                   'project}/.venv link=yes settings={project}.settings.production'.format(
-                                       project=project_folder
-                                   )
+                    'module_args': 'command=collectstatic app_path=/var/www/{project} virtualenv=/var/www/{project}/.venv link=yes settings={project}.settings.production'.format(
+                        project=project_folder
+                    )
                 }
             },
             {
@@ -632,10 +627,9 @@ class Command(BaseCommand):
                 'title': "Ensure that the application file permissions are set properly",
                 'ansible_arguments': {
                     'module_name': 'file',
-                    'module_args': 'path=/var/www/{project}/.venv recurse=yes owner={project} group=webapps '
-                                   'state=directory'.format(
-                                       project=project_folder
-                                   )
+                    'module_args': 'path=/var/www/{project}/.venv recurse=yes owner={project} group=webapps state=directory'.format(
+                        project=project_folder
+                    )
                 }
             }
         ]
@@ -671,10 +665,9 @@ class Command(BaseCommand):
                 'title': "Ensure that the application site is enabled",
                 'ansible_arguments': {
                     'module_name': 'command',
-                    'module_args': 'ln -s /etc/nginx/sites-available/{project} /etc/nginx/sites-enabled/{project} '
-                                   'creates=/etc/nginx/sites-enabled/{project}'.format(
-                                       project=project_folder
-                                   )
+                    'module_args': 'ln -s /etc/nginx/sites-available/{project} /etc/nginx/sites-enabled/{project} creates=/etc/nginx/sites-enabled/{project}'.format(
+                        project=project_folder
+                    )
                 }
             },
             {
