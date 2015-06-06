@@ -17,7 +17,7 @@ class Command(BaseCommand):
 
         # Define current host from settings in server config
         env.host_string = config['remote']['server']['ip']
-        env.user = 'root'
+        env.user = 'deploy'
         env.disable_known_hosts = True
         env.reject_unknown_hosts = False
 
@@ -35,14 +35,14 @@ class Command(BaseCommand):
         with hide('output', 'running', 'warnings'):
             with lcd(local_project_path):
                 project_folder = local(
-                    "basename $( find {} -name 'wsgi.py' -not -path '*/.venv/*' -not -path '*/venv/*' | xargs -0 -n1 "
-                    "dirname )".format(
+                    "basename $( find {} -name 'wsgi.py' -not -path '*/.venv/*' -not -path '*/venv/*' | xargs -0 -n1 dirname )".format(
                         local_project_path
                     ), capture=True)
 
         with settings(warn_only=True):
-            local('rsync -rh {} root@{}:/var/www/{}_media'.format(
+            local('rsync -rh {}/ {}@{}:/var/www/{}_media/'.format(
                 django_settings.MEDIA_ROOT,
+                env.user,
                 env.host_string,
                 project_folder,
             ))
