@@ -194,18 +194,25 @@ class Command(BaseCommand):
                 else:
                     venv = '/var/www/{}/.venv/'.format(project_folder)
 
+                sudo('chown {}:webapps -R /var/www/*'.format(project_folder))
+                sudo('chmod 775 -R /var/www/'.format(project_folder))
+
+                run('git pull')
+
+                # Rebuild the virtualenv.
+                sudo('rm -rf {}'.format(venv))
+                sudo('virtualenv {}'.format(venv))
+
+                sudo('chown -R {}:webapps {}'.format(project_folder, venv))
+                sudo('chmod -R 775 {}'.format(venv))
+
                 with virtualenv(venv):
                     with shell_env(DJANGO_SETTINGS_MODULE="{}.settings.production".format(project_folder)):
-                        sudo('chown {}:webapps -R /var/www/*'.format(project_folder))
-                        sudo('chmod 775 -R /var/www/'.format(project_folder))
-
-                        run('git pull')
-
-                        run('[[ -e requirements.txt ]] && pip install -r requirements.txt')
+                        run('pip install -q gunicorn')
+                        run('[[ -e requirements.txt ]] && pip install -qr requirements.txt')
 
                         sudo('[[ -e Gulpfile.js ]] && gulp styles')
-
-                        sudo('./manage.py collectstatic -l --noinput', user=project_folder)
+                        run('./manage.py collectstatic -l --noinput')
 
                         requirements = run('pip freeze')
                         compressor = False
