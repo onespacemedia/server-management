@@ -13,7 +13,7 @@ class Command(BaseCommand):
 
         # Define current host from settings in server config
         env.host_string = config['remote']['server']['ip']
-        env.user = 'root'
+        env.user = 'deploy'
         env.disable_known_hosts = True
         env.reject_unknown_hosts = False
 
@@ -26,14 +26,14 @@ class Command(BaseCommand):
 
         with settings(warn_only=True):
             # Dump the database on the server.
-            sudo("su - {user} -c 'pg_dump {name} -cOx -U {user} -f /home/{name}/{name}.sql --clean'".format(
+            sudo("su - {user} -c 'pg_dump {name} -cOx -U {user} -f /home/{user}/{name}.sql --clean'".format(
                 name=config['remote']['database']['name'],
                 user=config['remote']['database']['user'],
             ))
 
             # Pull the SQL file down.
             local('scp {}@{}:/home/{}/{}.sql ~/{}.sql'.format(
-                'root',
+                env.user,
                 env.host_string,
                 config['remote']['database']['user'],
                 config['remote']['database']['name'],
@@ -41,7 +41,7 @@ class Command(BaseCommand):
             ))
 
             # Delete the file on the server.
-            run('rm /home/{}/{}.sql'.format(
+            sudo('rm -f /home/{}/{}.sql'.format(
                 config['remote']['database']['user'],
                 config['remote']['database']['name'],
             ))
