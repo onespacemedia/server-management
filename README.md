@@ -20,7 +20,7 @@ The commands are all wrappers around [Ansible's](/ansible/ansible) [Python API](
 * The application stack consists of Nginx, Supervisor, Gunicorn, Memcached and PostgreSQL.
 * The deployment process will deploy all services onto one machine, it does not support splitting services across multiple machines, though as we're using Ansible it could be possible in the future.
 * Your project is expected to use a virtual environment, with the folder in the same directory as the ``manage.py`` file, and be named ``venv`` or ``.venv``.
-* The deploy script currently logs in as root and installs the base packages as root. The application, PostgreSQL server and Supervisor all run under their own users.
+* The deploy script currently logs in as root and installs the base packages as root. It then creates a deploy user and disable root access. The application, PostgreSQL server and Supervisor all run under their own users.
 * The deployment script does not currently support uploading HTTPS / SSL certificates or automatically configurating nginx to handle HTTPS traffic.
 * Specific static and media paths are required, they are documented below.
 
@@ -91,6 +91,7 @@ The deploy script is the most complex command in the library, but saves many man
 #### On the remote server
 * Base actions:
 	* Update the apt-cache.
+	* Enables unattended-upgrades
 	* Installs a set of base packages via apt-get:
 	    * ``build-essential``
 	    * ``git``
@@ -98,12 +99,14 @@ The deploy script is the most complex command in the library, but saves many man
 	    * ``python-pip``
 	    * ``supervisor``
 	    * ``libjpeg-dev``
+	    * ``libffi-dev``
 	    * ``npm``
 	    * ``memcached``
+	    * ``libgeoip-dev``
 	* Installs ``bower`` with ``npm``.
 	* Installs ``gulp`` with ``npm``.
-	* Generates a SSH key.
 	* Installs ``virtualenv`` with pip.
+	* 
 * PostgreSQL actions:
 	* Installs PostgreSQL with the following packages:
 	    * ``postgresql-9.3``
