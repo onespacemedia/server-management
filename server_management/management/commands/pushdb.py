@@ -14,7 +14,7 @@ class Command(BaseCommand):
 
         # Define current host from settings in server config
         env.host_string = config['remote']['server']['ip']
-        env.user = 'root'
+        env.user = 'deploy'
         env.disable_known_hosts = True
         env.reject_unknown_hosts = False
 
@@ -28,21 +28,22 @@ class Command(BaseCommand):
         with settings(warn_only=True):
 
             # Create a final dump of the database
-            local('pg_dump {name} -cOx -U {user} -f ~/{name}-final-dump.sql --clean'.format(
+            local('pg_dump {name} -cOx -U {user} -f ~/{name}.sql --clean'.format(
                 name=config['local']['database']['name'],
                 user=os.getlogin()
             ))
 
             # Push the database from earlier up to the server
-            local('scp ~/{}-final-dump.sql {}@{}:/tmp/{}.sql'.format(
+            local('scp ~/{}.sql {}@{}:/tmp/{}.sql'.format(
                 config['local']['database']['name'],
-                'root',
+                env.user,
                 config['remote']['server']['ip'],
                 config['remote']['database']['name'],
             ))
 
             # Import the database file
-            sudo("su - {name} -c 'psql -q {name} < /tmp/{name}.sql > /dev/null 2>&1'".format(
+            # sudo("su - {name} -c 'psql -q {name} < /tmp/{name}.sql > /dev/null 2>&1'".format(
+            sudo("su - {name} -c 'psql -q {name} < /tmp/{name}.sql'".format(
                 name=config['remote']['database']['name']
             ))
 
@@ -52,6 +53,6 @@ class Command(BaseCommand):
             ))
 
             # Remove the SQL file from the host
-            local('rm ~/{}-final-dump.sql'.format(
+            local('rm ~/{}.sql'.format(
                 config['local']['database']['name']
             ))
