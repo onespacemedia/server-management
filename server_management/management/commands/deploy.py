@@ -486,8 +486,8 @@ class Command(BaseCommand):
                 'ansible_arguments': {
                     'module_name': 'command',
                     'module_args': 'virtualenv /var/www/{project}/.venv --no-site-packages creates=/var/www/{project}/.venv'.format(
-                                       project=project_folder
-                                   )
+                        project=project_folder
+                    )
                 }
             },
             {
