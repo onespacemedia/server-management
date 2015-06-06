@@ -12,7 +12,7 @@ class Command(BaseCommand):
 
         # Define current host from settings in server config
         env.host_string = config['remote']['server']['ip']
-        env.user = 'root'
+        env.user = 'deploy'
         env.disable_known_hosts = True
         env.reject_unknown_hosts = False
 
@@ -42,7 +42,8 @@ class Command(BaseCommand):
                 django_settings.STATIC_ROOT
             ))
 
-            local('rsync -rh --exclude "assets/" root@{}:/var/www/{}_media/ {}'.format(
+            local('rsync -rh --exclude "assets/" {}@{}:/var/www/{}_media/ {}'.format(
+                env.user,
                 env.host_string,
                 project_folder,
                 django_settings.MEDIA_ROOT
