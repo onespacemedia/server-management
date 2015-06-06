@@ -57,6 +57,11 @@ class Command(BaseCommand):
                         local_project_path
                     ), capture=True)
 
+                with settings(warn_only=True):
+                    if local('[[ -e ../requirements.txt ]]').return_code:
+                        print "No requirements.txt"
+                        exit()
+
         # Compress the domain names for nginx
         domain_names = " ".join(django_settings.ALLOWED_HOSTS)
 
