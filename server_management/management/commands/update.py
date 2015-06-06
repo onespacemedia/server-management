@@ -20,6 +20,7 @@ class Command(BaseCommand):
     bot_emoji = ":neckbeard:"
     current_commit = os.popen("git rev-parse --short HEAD").read().strip()
     remote = os.popen("git config --get remote.origin.url").read().split(':')[1].split('.')[0]
+    slack_enabled = True
 
     def _bitbucket_commit_url(self, commit):
         return "<https://bitbucket.org/{}/commits/{commit}|{commit}>".format(
@@ -35,6 +36,9 @@ class Command(BaseCommand):
         )
 
     def _notify_start(self):
+        if not self.slack_enabled:
+            return
+
         self.start_time = datetime.datetime.now()
 
         requests.post(self.endpoint, data={
@@ -72,6 +76,9 @@ class Command(BaseCommand):
         })
 
     def _notify_success(self):
+        if not self.slack_enabled:
+            return
+
         self.end_time = datetime.datetime.now()
 
         requests.post(self.endpoint, data={
@@ -116,6 +123,9 @@ class Command(BaseCommand):
         })
 
     def _notify_failed(self, message):
+        if not self.slack_enabled:
+            return
+
         requests.post(self.endpoint, data={
             'payload': json.dumps({
                 'channel': self.channel,
