@@ -5,7 +5,7 @@ DJANGODIR=/var/www/{{ project }}
 SOCKFILE=/var/www/{{ project }}/.venv/run/gunicorn.sock
 USER={{ project }}
 GROUP=webapps
-NUM_WORKERS=`expr 2 \* \`cat /proc/cpuinfo | grep Processor | wc -l\` + 1`
+NUM_WORKERS=`expr 2 \* \`cat /proc/cpuinfo | grep processor | wc -l\` + 1`
 DJANGO_WSGI_MODULE={{ project }}.wsgi
 
 echo "Starting $NAME as `whoami`"
