@@ -1,5 +1,6 @@
 from django.conf import settings as django_settings
 from django.core.management.base import BaseCommand
+from fabric.contrib.console import confirm
 
 from _core import load_config
 
@@ -21,6 +22,14 @@ class Command(BaseCommand):
         env.disable_known_hosts = True
         env.reject_unknown_hosts = False
 
+        # Ask the user if the server we are hosting on is AWS
+        aws_check = confirm('Are we deploying to AWS?', default=False)
+
+        if aws_check:
+            env.user = 'ubuntu'
+            env.key_filename = prompt(
+                'Please enter the path to the AWS key pair: ')
+
         # Make sure we can connect to the server
         with hide('output', 'running', 'warnings'):
             with settings(warn_only=True):
@@ -40,7 +49,8 @@ class Command(BaseCommand):
                     ), capture=True)
 
         with settings(warn_only=True):
-            local('rsync -rh {}/ {}@{}:/var/www/{}_media/'.format(
+            local('rsync -r -v -h{}{}/ {}@{}:/var/www/{}_media/'.format(
+                ' ' if not aws_check else ' -e "ssh -i {}" '.format(env.key_filename),
                 django_settings.MEDIA_ROOT,
                 env.user,
                 env.host_string,

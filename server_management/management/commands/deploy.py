@@ -8,6 +8,7 @@ from django.core.files.temp import NamedTemporaryFile
 from django.core.management.base import BaseCommand
 from django.template.loader import render_to_string
 from fabric.api import *
+from fabric.contrib.console import confirm
 import requests
 
 from _core import load_config, ansible_task, run_tasks, check_request
@@ -24,6 +25,13 @@ class Command(BaseCommand):
         env.user = 'root'
         env.disable_known_hosts = True
         env.reject_unknown_hosts = False
+
+        # Ask the user if the server we are hosting on is AWS
+        aws_check = confirm('Are we deploying to AWS?', default=False)
+
+        if aws_check:
+            env.user = 'ubuntu'
+            env.key_filename = prompt('Please enter the path to the AWS key pair: ')
 
         # Make sure we can connect to the server
         with hide('output', 'running', 'warnings'):
@@ -168,6 +176,7 @@ class Command(BaseCommand):
                     'npm',
                     'memcached',
                     'libgeoip-dev',
+                    'libmysqlclient-dev',
                 ]
             },
             {
@@ -199,7 +208,7 @@ class Command(BaseCommand):
                 }
             }
         ]
-        run_tasks(env.host_string, base_tasks)
+        run_tasks(env, base_tasks)
 
         # Define SSH tasks
         ssh_tasks = [
@@ -278,7 +287,7 @@ class Command(BaseCommand):
                 }
             }
         ]
-        run_tasks(env.host_string, ssh_tasks)
+        run_tasks(env, ssh_tasks)
 
         # Define db tasks
         db_tasks = [
@@ -355,7 +364,7 @@ class Command(BaseCommand):
                 }
             },
         ]
-        run_tasks(env.host_string, db_tasks)
+        run_tasks(env, db_tasks)
 
         # Define web tasks
         web_tasks = [
@@ -379,16 +388,16 @@ class Command(BaseCommand):
                 }
             }
         ]
-        run_tasks(env.host_string, web_tasks)
+        run_tasks(env, web_tasks)
 
         # Get SSH Key from server
         print "[\033[95mTASK\033[0m] Request SSH key from server..."
         ssh_key_request = ansible_task(
-            env.host_string,
+            env,
             module_name='shell',
             module_args='cat /home/deploy/.ssh/id_rsa.pub'
         )
-        check_request(ssh_key_request, env.host_string, "TASK")
+        check_request(ssh_key_request, env, "TASK")
         ssh_key = ssh_key_request['contacted'][env.host_string]['stdout']
 
         print ""
@@ -448,7 +457,7 @@ class Command(BaseCommand):
                 }
             },
         ]
-        run_tasks(env.host_string, git_tasks)
+        run_tasks(env, git_tasks)
 
         # Define static tasks
         static_tasks = [
@@ -477,7 +486,7 @@ class Command(BaseCommand):
                 }
             },
         ]
-        run_tasks(env.host_string, static_tasks)
+        run_tasks(env, static_tasks)
 
         # Define venv tasks
         venv_tasks = [
@@ -526,18 +535,18 @@ class Command(BaseCommand):
                 }
             },
         ]
-        run_tasks(env.host_string, venv_tasks)
+        run_tasks(env, venv_tasks)
 
         # Check to see if we have a requirements file
         print "[\033[95mTASK\033[0m] Looking for a requirements.txt file..."
         requirements_check = ansible_task(
-            env.host_string,
+            env,
             module_name='stat',
             module_args='path=/var/www/{}/requirements.txt'.format(
                 project_folder
             )
         )
-        check_request(requirements_check, env.host_string, "TASK")
+        check_request(requirements_check, env, "TASK")
 
         print ""
 
@@ -607,7 +616,7 @@ class Command(BaseCommand):
             }
         ]
 
-        run_tasks(env.host_string, requirement_tasks)
+        run_tasks(env, requirement_tasks)
 
         # Define permission tasks
         permission_tasks = [
@@ -633,7 +642,7 @@ class Command(BaseCommand):
                 }
             }
         ]
-        run_tasks(env.host_string, permission_tasks)
+        run_tasks(env, permission_tasks)
 
         # Define nginx tasks
         nginx_tasks = [
@@ -685,7 +694,7 @@ class Command(BaseCommand):
                 }
             },
         ]
-        run_tasks(env.host_string, nginx_tasks)
+        run_tasks(env, nginx_tasks)
 
         # Define supervisor tasks
         supervisor_tasks = [
@@ -714,7 +723,7 @@ class Command(BaseCommand):
                 }
             },
         ]
-        run_tasks(env.host_string, supervisor_tasks)
+        run_tasks(env, supervisor_tasks)
 
         # Delete files
         for session_file in session_files:

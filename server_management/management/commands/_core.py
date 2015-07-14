@@ -18,8 +18,8 @@ def load_config():
     return config
 
 
-def check_request(request, host, request_type, color='\033[95m'):
-    if len(request['dark']) or request['contacted'][host].get('failed', None) is True:
+def check_request(request, env, request_type, color='\033[95m'):
+    if len(request['dark']) or request['contacted'][env.host_string].get('failed', None) is True:
         print "[{}{}\033[0m] [\033[91mFAILED\033[0m]".format(color, request_type)
         print request
         exit()
@@ -27,22 +27,27 @@ def check_request(request, host, request_type, color='\033[95m'):
         print "[{}{}\033[0m] [\033[92mDONE\033[0m]".format(color, request_type)
 
 
-def ansible_task(host, **kwargs):
+def ansible_task(env, **kwargs):
     # Create ansible inventory
-    ansible_inventory = ansible.inventory.Inventory([host])
+    ansible_inventory = ansible.inventory.Inventory([env.host_string])
 
     ansible_args = dict({
                             'pattern': 'all',
                             'inventory': ansible_inventory,
                             'sudo': True,
                             'sudo_user': 'root',
-                            'remote_user': 'root'
+                            'remote_user': env.user
                         }.items() + kwargs.items())
+
+    if hasattr(env, 'key_filename'):
+        ansible_args['private_key_file'] = env.key_filename
+
+    print ansible_args
 
     return ansible.runner.Runner(**ansible_args).run()
 
 
-def run_tasks(host, tasks):
+def run_tasks(env, tasks):
     # Loop tasks
     for task in tasks:
 
@@ -50,10 +55,10 @@ def run_tasks(host, tasks):
             print "[\033[95mTASK\033[0m] {}...".format(task['title'])
 
             # Run task with arguments
-            task_result = ansible_task(host, **task['ansible_arguments'])
+            task_result = ansible_task(env, **task['ansible_arguments'])
 
             # Check result
-            check_request(task_result, host, "TASK")
+            check_request(task_result, env, "TASK")
 
         else:
             print "[\033[95mTASK\033[0m] {}...".format(task['title'])
@@ -70,10 +75,10 @@ def run_tasks(host, tasks):
                 )
 
                 # Run task with arguments
-                task_result = ansible_task(host, **task['ansible_arguments'])
+                task_result = ansible_task(env, **task['ansible_arguments'])
 
                 # Check result
-                check_request(task_result, host, "ITEM", color='\033[94m')
+                check_request(task_result, env, "ITEM", color='\033[94m')
 
             print "[\033[95mTASK\033[0m] [\033[92mDONE\033[0m]"
 

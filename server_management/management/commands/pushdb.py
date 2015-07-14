@@ -1,4 +1,5 @@
 from django.core.management.base import BaseCommand
+from fabric.contrib.console import confirm
 
 from _core import load_config
 
@@ -18,6 +19,14 @@ class Command(BaseCommand):
         env.disable_known_hosts = True
         env.reject_unknown_hosts = False
 
+        # Ask the user if the server we are hosting on is AWS
+        aws_check = confirm('Are we deploying to AWS?', default=False)
+
+        if aws_check:
+            env.user = 'ubuntu'
+            env.key_filename = prompt(
+                'Please enter the path to the AWS key pair: ')
+
         # Make sure we can connect to the server
         with hide('output', 'running', 'warnings'):
             with settings(warn_only=True):
@@ -34,7 +43,8 @@ class Command(BaseCommand):
             ))
 
             # Push the database from earlier up to the server
-            local('scp ~/{}.sql {}@{}:/tmp/{}.sql'.format(
+            local('scp{}~/{}.sql {}@{}:/tmp/{}.sql'.format(
+                ' ' if not aws_check else ' -i {} '.format(env.key_filename),
                 config['local']['database']['name'],
                 env.user,
                 config['remote']['server']['ip'],
