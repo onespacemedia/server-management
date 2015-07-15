@@ -130,7 +130,8 @@ class Command(BaseCommand):
 
         # Parse files
         session_files['gunicorn_start'].write(render_to_string('gunicorn_start', {
-            'project': project_folder
+            'project': project_folder,
+            'settings': remote['server'].get('settings_file', 'production')
         }))
         session_files['gunicorn_start'].close()
 
