@@ -39,7 +39,9 @@ We need to add ``onespacemedia-server-management`` to our project, so add ``serv
         'server_management',
     ]
     
-Next, you need to create a ``server.json`` file which contains the information about your remote server and your database. This will live in the project folder above ``manage.py``, you can print the exact location with ``settings.SITE_ROOT``. An example file is as follows:
+Next, you need to create a ``server.json`` file which contains the information about your remote server and your database. This will live in the project folder above ``manage.py``, you can print the exact location with ``settings.SITE_ROOT``. Some example files are below:
+
+### Single host
 
     {
         "local": {
@@ -58,6 +60,43 @@ Next, you need to create a ``server.json`` file which contains the information a
             }
         }
     }
+
+### Multiple hosts (including AWS)
+
+Please note that the `remote` key changes to `remotes`.
+
+    {
+        "local": {
+            "database": {
+                "name": "vetct"
+            }
+        },
+        "remotes": {
+            "staging": {
+                "server": {
+                    "ip": "ec2-xx-xx-xx-xx.eu-west-1.compute.amazonaws.com",
+                    "identity_file": "~/.ssh/server-key.pem",
+                    "initial_user": "ubuntu"
+                },
+                "database": {
+                    "password": "",
+                    "name": "example_prod",
+                    "user": "example_prod_user"
+                }
+            },
+            "production": {
+                "server": {
+                    "ip": "12.34.56.78"
+                },
+                "database": {
+                    "password": "",
+                    "name": "example_prod",
+                    "user": "example_prod_user"
+                }
+            }
+        }
+    }
+
 
 The default PostgreSQL deployment uses trust authentication for connecting to the database, so a password is not usually required.
 
