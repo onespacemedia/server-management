@@ -100,7 +100,6 @@ class Command(BaseCommand):
 
         # Create session_files
         session_files = {
-            'pgpass': NamedTemporaryFile(delete=False),
             'gunicorn_start': NamedTemporaryFile(delete=False),
             'supervisor_config': NamedTemporaryFile(delete=False),
             'nginx_site_config': NamedTemporaryFile(delete=False),
@@ -108,9 +107,6 @@ class Command(BaseCommand):
         }
 
         # Parse files
-        session_files['pgpass'].write(render_to_string('pgpass', config['remote']['database']))
-        session_files['pgpass'].close()
-
         session_files['gunicorn_start'].write(render_to_string('gunicorn_start', {
             'project': project_folder
         }))
