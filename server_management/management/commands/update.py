@@ -31,8 +31,8 @@ class Command(BaseCommand):
     def _bitbucket_diff_url(self, commit1, commit2):
         return "<https://bitbucket.org/{}/branches/compare/{}..{}#diff|diff>".format(
             self.remote,
-            commit1,
             commit2,
+            commit1,
         )
 
     def _notify_start(self):
