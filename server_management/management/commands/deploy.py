@@ -27,11 +27,20 @@ class Command(BaseCommand):
             remote = config['remote']
         elif 'remotes' in config:
             # Prompt for a host selection.
-            print "Available hosts: {}".format(
-                ', '.join(config['remotes'].keys())
-            )
+            remote_keys = config['remotes'].keys()
 
-            remote_prompt = prompt("Please enter a remote: ", default=config['remotes'].keys()[0])
+            if len(remote_keys) == 0:
+                print "No remotes specified in config."
+                exit()
+            elif len(remote_keys) == 1:
+                remote_prompt = remote_keys[0]
+            else:
+                print "Available hosts: {}".format(
+                    ', '.join(config['remotes'].keys())
+                )
+
+                remote_prompt = prompt("Please enter a remote: ", default=remote_keys[0])
+
             env.host_string = config['remotes'][remote_prompt]['server']['ip']
             remote = config['remotes'][remote_prompt]
         else:
