@@ -51,9 +51,9 @@ class Command(BaseCommand):
             else:
                 env.user = 'ubuntu'
 
-            if 'identify_file' in remote['server']:
-                if remote['server']['identify_file']:
-                    env.key_filename = remote['server']['identify_file']
+            if 'identity_file' in remote['server']:
+                if remote['server']['identity_file']:
+                    env.key_filename = remote['server']['identity_file']
             else:
                 key = prompt('Please enter the path to the AWS key pair: ')
                 if key:
