@@ -21,21 +21,43 @@ class Command(BaseCommand):
         config = load_config()
 
         # Define current host from settings in server config
-        env.host_string = config['remote']['server']['ip']
+        # First check if there is a single remote or multiple.
+        if 'remote' in config:
+            env.host_string = config['remote']['server']['ip']
+            remote = config['remote']
+        elif 'remotes' in config:
+            # Prompt for a host selection.
+            print "Available hosts: {}".format(
+                ', '.join(config['remotes'].keys())
+            )
+
+            remote_prompt = prompt("Please enter a remote: ", default=config['remotes'].keys()[0])
+            env.host_string = config['remotes'][remote_prompt]['server']['ip']
+            remote = config['remotes'][remote_prompt]
+        else:
+            print "No remotes specified in config."
+            exit()
+
         env.user = 'root'
         env.disable_known_hosts = True
         env.reject_unknown_hosts = False
 
-        print env.host_string
-
         # Ask the user if the server we are hosting on is AWS
-        aws_check = confirm('Are we deploying to AWS?', default=False)
+        aws_check = 'amazonaws.com' in env.host_string or confirm('Are we deploying to AWS?', default=False)
 
         if aws_check:
-            env.user = 'ubuntu'
-            key = prompt('Please enter the path to the AWS key pair: ')
-            if key:
-                env.key_filename = key
+            if 'initial_user' in remote['server']:
+                env.user = remote['server']['initial_user']
+            else:
+                env.user = 'ubuntu'
+
+            if 'identify_file' in remote['server']:
+                if remote['server']['identify_file']:
+                    env.key_filename = remote['server']['identify_file']
+            else:
+                key = prompt('Please enter the path to the AWS key pair: ')
+                if key:
+                    env.key_filename = key
 
         # Make sure we can connect to the server
         with hide('output', 'running', 'warnings'):
