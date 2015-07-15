@@ -173,6 +173,15 @@ class Command(BaseCommand):
         env.disable_known_hosts = True
         env.reject_unknown_hosts = False
 
+        # Ask the user if the server we are hosting on is AWS
+        aws_check = confirm('Are we deploying to AWS?', default=False)
+
+        if aws_check:
+            env.user = 'ubuntu'
+            key = prompt('Please enter the path to the AWS key pair: ')
+            if key:
+                env.key_filename = key
+
         # Make sure we can connect to the server
         with hide('output', 'running', 'warnings'):
             with settings(warn_only=True):

@@ -27,8 +27,11 @@ class Command(BaseCommand):
 
         if aws_check:
             env.user = 'ubuntu'
-            env.key_filename = prompt(
-                'Please enter the path to the AWS key pair: ')
+            if aws_check:
+                env.user = 'ubuntu'
+                key = prompt('Please enter the path to the AWS key pair: ')
+                if key:
+                    env.key_filename = key
 
         # Make sure we can connect to the server
         with hide('output', 'running', 'warnings'):
@@ -50,7 +53,7 @@ class Command(BaseCommand):
 
         with settings(warn_only=True):
             local('rsync -r -v -h{}{}/ {}@{}:/var/www/{}_media/'.format(
-                ' ' if not aws_check else ' -e "ssh -i {}" '.format(env.key_filename),
+                ' ' if not hasattr(env, 'key_filename') else ' -e "ssh -i {}" '.format(env.key_filename),
                 django_settings.MEDIA_ROOT,
                 env.user,
                 env.host_string,

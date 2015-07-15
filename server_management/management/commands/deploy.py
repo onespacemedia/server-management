@@ -26,12 +26,16 @@ class Command(BaseCommand):
         env.disable_known_hosts = True
         env.reject_unknown_hosts = False
 
+        print env.host_string
+
         # Ask the user if the server we are hosting on is AWS
         aws_check = confirm('Are we deploying to AWS?', default=False)
 
         if aws_check:
             env.user = 'ubuntu'
-            env.key_filename = prompt('Please enter the path to the AWS key pair: ')
+            key = prompt('Please enter the path to the AWS key pair: ')
+            if key:
+                env.key_filename = key
 
         # Make sure we can connect to the server
         with hide('output', 'running', 'warnings'):
@@ -328,6 +332,13 @@ class Command(BaseCommand):
                     'module_args': 'pgtune -i /etc/postgresql/9.3/main/postgresql.conf.old -o '
                                    '/etc/postgresql/9.3/main/postgresql.conf --type=Web',
                     'sudo_user': 'postgres'
+                }
+            },
+            {
+                'title': "Ensure we have the database locale",
+                'ansible_arguments': {
+                    'module_name': 'locale_gen',
+                    'module_args': 'name=en_GB.UTF-8 state=present'
                 }
             },
             {
@@ -754,7 +765,10 @@ class Command(BaseCommand):
                 django_settings.MEDIA_ROOT,
             ))
 
-            local('rsync -rhe "ssh -o StrictHostKeyChecking=no" {}/ {}@{}:{}/'.format(
+            local('rsync -rhe "ssh{} -o StrictHostKeyChecking=no" {}/ {}@{}:{}/'.format(
+                ' ' if not hasattr(env, 'key_filename') else ' -i {} '.format(
+                    env.key_filename
+                ),
                 django_settings.MEDIA_ROOT,
                 'deploy',
                 config['remote']['server']['ip'],
@@ -762,12 +776,16 @@ class Command(BaseCommand):
                     project_folder
                 )
             ))
+
             print "[\033[95mTASK\033[0m] [\033[92mDONE\033[0m]"
             print ""
 
             # Push the database from earlier up to the server
             print "[\033[95mTASK\033[0m] Push local database to the server..."
-            local('scp ~/{}-final-dump.sql {}@{}:/tmp/{}.sql'.format(
+            local('scp{}~/{}-final-dump.sql {}@{}:/tmp/{}.sql'.format(
+                ' ' if not hasattr(env, 'key_filename') else ' -i {} '.format(
+                    env.key_filename
+                ),
                 config['local']['database']['name'],
                 'deploy',
                 config['remote']['server']['ip'],

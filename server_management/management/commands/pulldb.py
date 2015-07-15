@@ -13,7 +13,7 @@ class Command(BaseCommand):
 
         # Define current host from settings in server config
         env.host_string = config['remote']['server']['ip']
-        env.user = 'deploy'
+        env.user = 'root'
         env.disable_known_hosts = True
         env.reject_unknown_hosts = False
 

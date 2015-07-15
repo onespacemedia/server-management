@@ -12,9 +12,11 @@ class Command(BaseCommand):
 
         # Define current host from settings in server config
         env.host_string = config['remote']['server']['ip']
-        env.user = 'deploy'
+        env.user = 'root'
         env.disable_known_hosts = True
         env.reject_unknown_hosts = False
+
+        print env.host_string
 
         # Make sure we can connect to the server
         with hide('output', 'running', 'warnings'):
