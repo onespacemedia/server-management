@@ -2,7 +2,6 @@
 
 NAME="{{ project }}"
 DJANGODIR=/var/www/{{ project }}
-SOCKFILE=/var/www/{{ project }}/.venv/run/gunicorn.sock
 USER={{ project }}
 GROUP=webapps
 NUM_WORKERS=`expr 2 \* \`cat /proc/cpuinfo | grep processor | wc -l\` + 1`
@@ -26,4 +25,4 @@ exec .venv/bin/gunicorn ${DJANGO_WSGI_MODULE}:application \
   		--workers $NUM_WORKERS \
   		--user=$USER --group=$GROUP \
   		--log-level=info \
-  		--bind=unix:$SOCKFILE
+  		--bind=127.0.0.1:2000

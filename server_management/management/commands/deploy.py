@@ -651,18 +651,6 @@ class Command(BaseCommand):
         # Define permission tasks
         permission_tasks = [
             {
-                'title': "Make the run directory",
-                'ansible_arguments': {
-                    'module_name': 'file',
-                    'module_args': 'path={} state=directory owner={} group=webapps recurse=yes'.format(
-                        "/var/www/{}/.venv/run".format(
-                            project_folder
-                        ),
-                        project_folder
-                    )
-                }
-            },
-            {
                 'title': "Ensure that the application file permissions are set properly",
                 'ansible_arguments': {
                     'module_name': 'file',
