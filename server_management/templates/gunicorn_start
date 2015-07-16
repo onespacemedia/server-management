@@ -13,14 +13,11 @@ echo "Starting $NAME as `whoami`"
 cd $DJANGODIR
 source .venv/bin/activate
 
-# Create the run directory if it doesn't exist.
-RUNDIR=$(dirname $SOCKFILE)
-test -d $RUNDIR || mkdir -p $RUNDIR
+export DJANGO_SETTINGS_MODULE={{ project }}.settings.{{ settings }}
 
 # Programs meant to be run under supervisor should not daemonize themselves
 # (do not use --daemon).
 exec .venv/bin/gunicorn ${DJANGO_WSGI_MODULE}:application \
-		--settings={{ project }}.settings.{{ settings }} \
  		--name $NAME \
   		--workers $NUM_WORKERS \
   		--user=$USER --group=$GROUP \
