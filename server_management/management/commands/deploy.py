@@ -635,8 +635,9 @@ class Command(BaseCommand):
                 'title': "Collect static files",
                 'ansible_arguments': {
                     'module_name': 'django_manage',
-                    'module_args': 'command=collectstatic app_path=/var/www/{project} virtualenv=/var/www/{project}/.venv link=yes settings={project}.settings.production'.format(
-                        project=project_folder
+                    'module_args': 'command=collectstatic app_path=/var/www/{project} virtualenv=/var/www/{project}/.venv settings={project}.settings.{settings}'.format(
+                        project=project_folder,
+                        settings=remote['server'].get('settings_file', 'production'),
                     )
                 }
             },
