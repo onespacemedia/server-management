@@ -191,24 +191,29 @@ class Command(BaseCommand):
                     venv = '/var/www/{}/.venv/'.format(project_folder)
 
                 sudo('chown {}:webapps -R /var/www/*'.format(project_folder))
-                sudo('chmod 775 -R /var/www/'.format(project_folder))
+                sudo('chmod ug+rwX -R /var/www/{}/.git'.format(project_folder))
 
-                run('git pull')
+                # Ensure the current user is in the webapps group.
+                sudo('usermod -aG webapps {}'.format(env.user))
+
+                run('git config --global user.email "developers@onespacemedia.com"')
+                run('git config --global user.name "Onespacemedia Developers"')
+                sudo('git stash', user='deploy')
+                sudo('git pull', user='deploy')
 
                 # Rebuild the virtualenv.
-                sudo('rm -rf {}'.format(venv))
-                sudo('virtualenv {}'.format(venv))
+                sudo('rm -rf {}'.format(venv), user=project_folder)
+                sudo('virtualenv {}'.format(venv), user=project_folder)
 
                 sudo('chown -R {}:webapps {}'.format(project_folder, venv))
-                sudo('chmod -R 775 {}'.format(venv))
 
                 with virtualenv(venv):
                     with shell_env(DJANGO_SETTINGS_MODULE="{}.settings.production".format(project_folder)):
-                        run('pip install -q gunicorn')
-                        run('[[ -e requirements.txt ]] && pip install -qr requirements.txt')
+                        sudo('pip install -q gunicorn', user=project_folder)
+                        sudo('[[ -e requirements.txt ]] && pip install -qr requirements.txt', user=project_folder)
 
                         sudo('[[ -e Gulpfile.js ]] && gulp styles')
-                        run('./manage.py collectstatic -l --noinput')
+                        run('./manage.py collectstatic --noinput')
 
                         requirements = run('pip freeze')
                         compressor = False
@@ -229,7 +234,6 @@ class Command(BaseCommand):
 
                         sudo('supervisorctl restart {}'.format(project_folder))
                         sudo('chown {}:webapps -R /var/www/*'.format(project_folder))
-                        sudo('chmod 775 -R /var/www/'.format(project_folder))
 
         # Register the release with Opbeat.
         if 'opbeat' in config and config['opbeat']['app_id'] and config['opbeat']['secret_token']:
