@@ -1,4 +1,3 @@
-# from django.conf import settings as django_settings
 from django.core.management.base import BaseCommand
 
 from _core import load_config
@@ -7,6 +6,7 @@ from fabric.api import *
 
 
 class Command(BaseCommand):
+
     def handle(self, *args, **options):
         # Load server config from project
         config, remote = load_config(env)
@@ -19,7 +19,8 @@ class Command(BaseCommand):
             ))
 
             # Pull the SQL file down.
-            local('scp {}@{}:/home/{}/{}.sql ~/{}.sql'.format(
+            local('scp {} {}@{}:/home/{}/{}.sql ~/{}.sql'.format(
+                '' if not hasattr(env, 'key_filename') else ' -i {} '.format(env.key_filename),
                 env.user,
                 env.host_string,
                 remote['database']['user'],
