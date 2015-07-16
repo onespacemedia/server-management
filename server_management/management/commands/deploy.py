@@ -370,12 +370,26 @@ class Command(BaseCommand):
                 }
             },
             {
+                'title': 'Reconfigure locales',
+                'ansible_arguments': {
+                    'module_name': 'command',
+                    'module_args': 'dpkg-reconfigure locales'
+                }
+            },
+            {
+                'title': "Restart PostgreSQL",
+                'ansible_arguments': {
+                    'module_name': 'service',
+                    'module_args': 'name=postgresql state=restarted enabled=yes'
+                }
+            },
+            {
                 'title': "Ensure database is created",
                 'ansible_arguments': {
                     'module_name': 'postgresql_db',
                     'module_args': "name='{}' encoding='UTF-8' lc_collate='en_GB.UTF-8' lc_ctype='en_GB.UTF-8' "
                                    "template='template0' state=present".format(
-                                       config['remote']['database']['name']
+                                       remote['database']['name']
                                    ),
                     'sudo_user': 'postgres'
                 }
@@ -385,9 +399,9 @@ class Command(BaseCommand):
                 'ansible_arguments': {
                     'module_name': 'postgresql_user',
                     'module_args': "db='{}' name='{}' password='{}' priv=ALL state=present".format(
-                        config['remote']['database']['name'],
-                        config['remote']['database']['user'],
-                        config['remote']['database']['password']
+                        remote['database']['name'],
+                        remote['database']['user'],
+                        remote['database']['password']
                     ),
                     'sudo_user': 'postgres'
                 }
@@ -397,7 +411,7 @@ class Command(BaseCommand):
                 'ansible_arguments': {
                     'module_name': 'postgresql_user',
                     'module_args': 'name={} role_attr_flags=NOSUPERUSER,NOCREATEDB state=present'.format(
-                        config['remote']['database']['name']
+                        remote['database']['name']
                     ),
                     'sudo_user': 'postgres'
                 }
