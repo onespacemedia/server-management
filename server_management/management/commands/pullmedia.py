@@ -3,9 +3,11 @@ from django.core.management.base import BaseCommand
 from fabric.api import *
 
 from _core import load_config
+import os
 
 
 class Command(BaseCommand):
+
     def handle(self, *args, **options):
         # Load server config from project
         config, remote = load_config(env)
@@ -29,7 +31,10 @@ class Command(BaseCommand):
                 django_settings.STATIC_ROOT
             ))
 
-            local('rsync -rh --exclude "assets/" {}@{}:/var/www/{}_media/ {}'.format(
+            local('rsync --progress -av{} --exclude "assets/" {}@{}:/var/www/{}_media/ {}'.format(
+                ' ' if not hasattr(env, 'key_filename') else ' -e "ssh -i {}"'.format(
+                    os.path.expanduser(env.key_filename),  # Fixes an rsync bug with ~ paths.
+                ),
                 env.user,
                 env.host_string,
                 project_folder,

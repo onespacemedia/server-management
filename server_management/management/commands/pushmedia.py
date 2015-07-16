@@ -1,10 +1,10 @@
 from django.conf import settings as django_settings
 from django.core.management.base import BaseCommand
-from fabric.contrib.console import confirm
 
 from _core import load_config
 
 from fabric.api import *
+import os
 
 
 class Command(BaseCommand):
@@ -28,8 +28,10 @@ class Command(BaseCommand):
                     ), capture=True)
 
         with settings(warn_only=True):
-            local('rsync -r -v -h{}{}/ {}@{}:/var/www/{}_media/'.format(
-                ' ' if not hasattr(env, 'key_filename') else ' -e "ssh -i {}" '.format(env.key_filename),
+            local('rsync --progress -av{} {}/ {}@{}:/var/www/{}_media/'.format(
+                ' ' if not hasattr(env, 'key_filename') else ' -e "ssh -i {}"'.format(
+                    os.path.expanduser(env.key_filename),  # Fixes an rsync bug with ~ paths.
+                ),
                 django_settings.MEDIA_ROOT,
                 env.user,
                 env.host_string,
