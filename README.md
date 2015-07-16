@@ -68,7 +68,7 @@ Please note that the `remote` key changes to `remotes`.
     {
         "local": {
             "database": {
-                "name": "vetct"
+                "name": "example_dev"
             }
         },
         "remotes": {
