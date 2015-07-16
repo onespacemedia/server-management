@@ -208,7 +208,11 @@ class Command(BaseCommand):
                 sudo('chown -R {}:webapps {}'.format(project_folder, venv))
 
                 with virtualenv(venv):
-                    with shell_env(DJANGO_SETTINGS_MODULE="{}.settings.production".format(project_folder)):
+                    with shell_env(DJANGO_SETTINGS_MODULE="{}.settings.{}".format(
+                        project_folder,
+                        remote['server'].get('settings_file', 'production')
+                    )):
+
                         sudo('pip install -q gunicorn', user=project_folder)
                         sudo('[[ -e requirements.txt ]] && pip install -qr requirements.txt', user=project_folder)
 
