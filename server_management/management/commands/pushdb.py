@@ -1,5 +1,4 @@
 from django.core.management.base import BaseCommand
-from fabric.contrib.console import confirm
 
 from _core import load_config
 
@@ -9,33 +8,10 @@ import os
 
 
 class Command(BaseCommand):
+
     def handle(self, *args, **options):
         # Load server config from project
-        config = load_config()
-
-        # Define current host from settings in server config
-        env.host_string = config['remote']['server']['ip']
-        env.user = 'deploy'
-        env.disable_known_hosts = True
-        env.reject_unknown_hosts = False
-
-        # Ask the user if the server we are hosting on is AWS
-        aws_check = confirm('Are we deploying to AWS?', default=False)
-
-        if aws_check:
-            env.user = 'ubuntu'
-            if aws_check:
-                env.user = 'ubuntu'
-                key = prompt('Please enter the path to the AWS key pair: ')
-                if key:
-                    env.key_filename = key
-
-        # Make sure we can connect to the server
-        with hide('output', 'running', 'warnings'):
-            with settings(warn_only=True):
-                if not run('whoami'):
-                    print "Failed to connect to remote server"
-                    exit()
+        config, remote = load_config(env)
 
         with settings(warn_only=True):
 
@@ -50,19 +26,20 @@ class Command(BaseCommand):
                 ' ' if not hasattr(env, 'key_filename') else ' -i {} '.format(env.key_filename),
                 config['local']['database']['name'],
                 env.user,
-                config['remote']['server']['ip'],
-                config['remote']['database']['name'],
+                remote['server']['ip'],
+                remote['database']['name'],
             ))
 
             # Import the database file
             # sudo("su - {name} -c 'psql -q {name} < /tmp/{name}.sql > /dev/null 2>&1'".format(
-            sudo("su - {name} -c 'psql -q {name} < /tmp/{name}.sql'".format(
-                name=config['remote']['database']['name']
+            sudo("su - {user} -c 'psql -q {name} < /tmp/{name}.sql'".format(
+                user=remote['database']['user'],
+                name=remote['database']['name']
             ))
 
             # Remove the database file
             run('rm /tmp/{}.sql'.format(
-                config['remote']['database']['name']
+                remote['database']['name']
             ))
 
             # Remove the SQL file from the host

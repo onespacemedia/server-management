@@ -7,12 +7,13 @@ from fabric.api import *
 
 
 class Command(BaseCommand):
+
     def handle(self, *args, **options):
         # Load server config from project
-        config = load_config()
+        config, remote = load_config(env)
 
         # Define current host from settings in server config
-        env.host_string = config['remote']['server']['ip']
+        env.host_string = remote['server']['ip']
         env.user = 'root'
         env.disable_known_hosts = True
         env.reject_unknown_hosts = False
@@ -27,8 +28,8 @@ class Command(BaseCommand):
         with settings(warn_only=True):
             # Dump the database on the server.
             sudo("su - {user} -c 'pg_dump {name} -cOx -U {user} -f /home/{name}/{name}.sql --clean'".format(
-                name=config['remote']['database']['name'],
-                user=config['remote']['database']['user'],
+                name=remote['database']['name'],
+                user=remote['database']['user'],
             ))
 
             # Create a backups folder
@@ -38,13 +39,13 @@ class Command(BaseCommand):
             local('scp {}@{}:/home/{}/{}.sql ~/backups/{}.sql'.format(
                 'root',
                 env.host_string,
-                config['remote']['database']['user'],
-                config['remote']['database']['name'],
+                remote['database']['user'],
+                remote['database']['name'],
                 config['local']['database']['name'],
             ))
 
             # Delete the file on the server.
             run('rm /home/{}/{}.sql'.format(
-                config['remote']['database']['user'],
-                config['remote']['database']['name'],
+                remote['database']['user'],
+                remote['database']['name'],
             ))

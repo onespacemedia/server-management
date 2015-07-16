@@ -165,30 +165,7 @@ class Command(BaseCommand):
         self._notify_start()
 
         # Load server config from project
-        config = load_config()
-
-        # Define current host from settings in server config
-        env.host_string = config['remote']['server']['ip']
-        env.user = 'deploy'
-        env.disable_known_hosts = True
-        env.reject_unknown_hosts = False
-
-        # Ask the user if the server we are hosting on is AWS
-        aws_check = confirm('Are we deploying to AWS?', default=False)
-
-        if aws_check:
-            env.user = 'ubuntu'
-            key = prompt('Please enter the path to the AWS key pair: ')
-            if key:
-                env.key_filename = key
-
-        # Make sure we can connect to the server
-        with hide('output', 'running', 'warnings'):
-            with settings(warn_only=True):
-                if not run('whoami'):
-                    print "Failed to connect to remote server"
-                    self._notify_failed("Failed to connect to remote server")
-                    exit()
+        config, remote = load_config(env)
 
         # Set local project path
         local_project_path = django_settings.SITE_ROOT

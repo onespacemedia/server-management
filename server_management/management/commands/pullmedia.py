@@ -8,22 +8,7 @@ from _core import load_config
 class Command(BaseCommand):
     def handle(self, *args, **options):
         # Load server config from project
-        config = load_config()
-
-        # Define current host from settings in server config
-        env.host_string = config['remote']['server']['ip']
-        env.user = 'root'
-        env.disable_known_hosts = True
-        env.reject_unknown_hosts = False
-
-        print env.host_string
-
-        # Make sure we can connect to the server
-        with hide('output', 'running', 'warnings'):
-            with settings(warn_only=True):
-                if not run('whoami'):
-                    print "Failed to connect to remote server"
-                    exit()
+        config, remote = load_config(env)
 
         # Set local project path
         local_project_path = django_settings.SITE_ROOT

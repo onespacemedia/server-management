@@ -1,10 +1,15 @@
 from django.conf import settings
+
+from fabric.api import hide, prompt, run, settings as fabric_settings
+from fabric.contrib.console import confirm
 import json
 import ansible.runner
 import ansible.inventory
 
 
-def load_config():
+def load_config(env):
+    env['sudo_prefix'] += '-H '
+
     # Load the json file
     try:
         json_data = open("{}/server.json".format(
@@ -14,8 +19,63 @@ def load_config():
     except:
         raise Exception("Something is wrong with the server.json file, make sure it exists and is valid JSON.")
 
+    # Define current host from settings in server config
+    # First check if there is a single remote or multiple.
+    if 'remote' in config:
+        env.host_string = config['remote']['server']['ip']
+        remote = config['remote']
+    elif 'remotes' in config:
+        # Prompt for a host selection.
+        remote_keys = config['remotes'].keys()
+
+        if len(remote_keys) == 0:
+            print "No remotes specified in config."
+            exit()
+        elif len(remote_keys) == 1:
+            remote_prompt = remote_keys[0]
+        else:
+            print "Available hosts: {}".format(
+                ', '.join(config['remotes'].keys())
+            )
+
+            remote_prompt = prompt("Please enter a remote: ", default=remote_keys[0])
+
+        env.host_string = config['remotes'][remote_prompt]['server']['ip']
+        remote = config['remotes'][remote_prompt]
+    else:
+        print "No remotes specified in config."
+        exit()
+
+    env.user = 'root'
+    env.disable_known_hosts = True
+    env.reject_unknown_hosts = False
+
+    # Ask the user if the server we are hosting on is AWS
+    aws_check = 'amazonaws.com' in env.host_string or confirm('Are we deploying to AWS?', default=False)
+
+    if aws_check:
+        if 'initial_user' in remote['server']:
+            env.user = remote['server']['initial_user']
+        else:
+            env.user = 'ubuntu'
+
+        if 'identity_file' in remote['server']:
+            if remote['server']['identity_file']:
+                env.key_filename = remote['server']['identity_file']
+        else:
+            key = prompt('Please enter the path to the AWS key pair: ')
+            if key:
+                env.key_filename = key
+
+    # Make sure we can connect to the server
+    with hide('output', 'running', 'warnings'):
+        with fabric_settings(warn_only=True):
+            if not run('whoami'):
+                print "Failed to connect to remote server"
+                exit()
+
     # Return the server config
-    return config
+    return config, remote
 
 
 def check_request(request, env, request_type, color='\033[95m'):

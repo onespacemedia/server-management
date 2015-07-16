@@ -9,41 +9,28 @@ from fabric.api import *
 class Command(BaseCommand):
     def handle(self, *args, **options):
         # Load server config from project
-        config = load_config()
-
-        # Define current host from settings in server config
-        env.host_string = config['remote']['server']['ip']
-        env.user = 'root'
-        env.disable_known_hosts = True
-        env.reject_unknown_hosts = False
-
-        # Make sure we can connect to the server
-        with hide('output', 'running', 'warnings'):
-            with settings(warn_only=True):
-                if not run('whoami'):
-                    print "Failed to connect to remote server"
-                    exit()
+        config, remote = load_config(env)
 
         with settings(warn_only=True):
             # Dump the database on the server.
             sudo("su - {user} -c 'pg_dump {name} -cOx -U {user} -f /home/{user}/{name}.sql --clean'".format(
-                name=config['remote']['database']['name'],
-                user=config['remote']['database']['user'],
+                name=remote['database']['name'],
+                user=remote['database']['user'],
             ))
 
             # Pull the SQL file down.
             local('scp {}@{}:/home/{}/{}.sql ~/{}.sql'.format(
                 env.user,
                 env.host_string,
-                config['remote']['database']['user'],
-                config['remote']['database']['name'],
+                remote['database']['user'],
+                remote['database']['name'],
                 config['local']['database']['name'],
             ))
 
             # Delete the file on the server.
             sudo('rm -f /home/{}/{}.sql'.format(
-                config['remote']['database']['user'],
-                config['remote']['database']['name'],
+                remote['database']['user'],
+                remote['database']['name'],
             ))
 
             # Drop the local db
