@@ -42,8 +42,6 @@ def ansible_task(env, **kwargs):
     if hasattr(env, 'key_filename'):
         ansible_args['private_key_file'] = env.key_filename
 
-    print ansible_args
-
     return ansible.runner.Runner(**ansible_args).run()
 
 
