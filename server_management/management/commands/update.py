@@ -191,6 +191,7 @@ class Command(BaseCommand):
                     venv = '/var/www/{}/.venv/'.format(project_folder)
 
                 sudo('chown {}:webapps -R /var/www/*'.format(project_folder))
+                sudo('chmod -R g+w /var/www/{}/'.format(project_folder))
                 sudo('chmod ug+rwX -R /var/www/{}/.git'.format(project_folder))
 
                 # Ensure the current user is in the webapps group.
@@ -201,11 +202,14 @@ class Command(BaseCommand):
                 sudo('git stash', user='deploy')
                 sudo('git pull', user='deploy')
 
+                sudo('chmod -R g+w /var/www/{}/'.format(project_folder))
+
                 # Rebuild the virtualenv.
                 sudo('rm -rf {}'.format(venv), user=project_folder)
                 sudo('virtualenv {}'.format(venv), user=project_folder)
 
                 sudo('chown -R {}:webapps {}'.format(project_folder, venv))
+                sudo('chmod -R g+w /var/www/*'.format(project_folder))
 
                 with virtualenv(venv):
                     with shell_env(DJANGO_SETTINGS_MODULE="{}.settings.{}".format(
