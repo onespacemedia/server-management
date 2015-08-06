@@ -220,7 +220,7 @@ class Command(BaseCommand):
                         sudo('pip install -q gunicorn', user=project_folder)
                         sudo('[[ -e requirements.txt ]] && pip install -qr requirements.txt', user=project_folder)
 
-                        sudo('[[ -e Gulpfile.js ]] && gulp styles')
+                        sudo('[[ -e Gulpfile.js || -e Gulpfile.babel.js ]] && gulp styles')
                         run('./manage.py collectstatic --noinput')
 
                         requirements = run('pip freeze')
