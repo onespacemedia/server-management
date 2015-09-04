@@ -46,7 +46,7 @@ def load_config(env):
         print "No remotes specified in config."
         exit()
 
-    env.user = 'root'
+    env.user = 'deploy'
     env.disable_known_hosts = True
     env.reject_unknown_hosts = False
 
