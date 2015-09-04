@@ -29,7 +29,7 @@ class Command(BaseCommand):
 
         with settings(warn_only=True):
             local('rsync --progress -av{} {}/ {}@{}:/var/www/{}_media/'.format(
-                ' ' if not hasattr(env, 'key_filename') else ' -e "ssh -i {}"'.format(
+                ' ' if not getattr(env, 'key_filename') else ' -e "ssh -i {}"'.format(
                     os.path.expanduser(env.key_filename),  # Fixes an rsync bug with ~ paths.
                 ),
                 django_settings.MEDIA_ROOT,

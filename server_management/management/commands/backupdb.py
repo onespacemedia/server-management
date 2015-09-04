@@ -24,7 +24,7 @@ class Command(BaseCommand):
 
             # Pull the SQL file down.
             local('scp {} {}@{}:/home/{}/{}.sql ~/Backups/{}-{}.sql'.format(
-                '' if not hasattr(env, 'key_filename') else ' -i {} '.format(env.key_filename),
+                '' if not getattr(env, 'key_filename') else ' -i {} '.format(env.key_filename),
                 env.user,
                 env.host_string,
                 remote['database']['user'],

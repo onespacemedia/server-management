@@ -99,7 +99,7 @@ def ansible_task(env, **kwargs):
                             'remote_user': env.user
                         }.items() + kwargs.items())
 
-    if hasattr(env, 'key_filename'):
+    if getattr(env, 'key_filename'):
         ansible_args['private_key_file'] = env.key_filename
 
     return ansible.runner.Runner(**ansible_args).run()

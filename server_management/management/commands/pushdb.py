@@ -23,7 +23,7 @@ class Command(BaseCommand):
 
             # Push the database from earlier up to the server
             local('scp{}~/{}.sql {}@{}:/tmp/{}.sql'.format(
-                ' ' if not hasattr(env, 'key_filename') else ' -i {} '.format(env.key_filename),
+                ' ' if not getattr(env, 'key_filename') else ' -i {} '.format(env.key_filename),
                 config['local']['database']['name'],
                 env.user,
                 remote['server']['ip'],
