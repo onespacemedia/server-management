@@ -244,7 +244,7 @@ class Command(BaseCommand):
                         if not compressor:
                             sudo('./manage.py compileassets', user=project_folder)
 
-                        if 'migrations' in git_changes:
+                        if 'migrations' in git_changes or 'requirements' in git_changes:
                             sudo('./manage.py migrate', user=project_folder)
 
                         if watson:
