@@ -200,16 +200,26 @@ class Command(BaseCommand):
                 run('git config --global user.email "developers@onespacemedia.com"')
                 run('git config --global user.name "Onespacemedia Developers"')
                 sudo('git stash', user='deploy')
-                sudo('git pull', user='deploy')
+                git_changes = sudo('git pull', user='deploy')
 
                 sudo('chmod -R g+w /var/www/{}*'.format(project_folder))
 
-                # Rebuild the virtualenv.
-                sudo('rm -rf {}'.format(venv), user=project_folder)
-                sudo('virtualenv {}'.format(venv), user=project_folder)
+                if 'requirements' in git_changes:
+                    # Rebuild the virtualenv.
+                    sudo('rm -rf {}'.format(venv), user=project_folder)
+                    sudo('virtualenv {}'.format(venv), user=project_folder)
 
-                sudo('chown -R {}:webapps {}'.format(project_folder, venv))
-                sudo('chmod -R g+w /var/www/{}*'.format(project_folder))
+                    sudo('chown -R {}:webapps {}'.format(project_folder, venv))
+                    sudo('chmod -R g+w /var/www/{}*'.format(project_folder))
+
+                    with virtualenv(venv):
+                        with shell_env(DJANGO_SETTINGS_MODULE="{}.settings.{}".format(
+                            project_folder,
+                            remote['server'].get('settings_file', 'production')
+                        )):
+
+                            sudo('pip install -q gunicorn', user=project_folder)
+                            sudo('[[ -e requirements.txt ]] && pip install -qr requirements.txt', user=project_folder)
 
                 with virtualenv(venv):
                     with shell_env(DJANGO_SETTINGS_MODULE="{}.settings.{}".format(
@@ -217,10 +227,9 @@ class Command(BaseCommand):
                         remote['server'].get('settings_file', 'production')
                     )):
 
-                        sudo('pip install -q gunicorn', user=project_folder)
-                        sudo('[[ -e requirements.txt ]] && pip install -qr requirements.txt', user=project_folder)
+                        if '.scss' in git_changes:
+                            sudo('[[ -e Gulpfile.js || -e Gulpfile.babel.js ]] && gulp styles')
 
-                        sudo('[[ -e Gulpfile.js || -e Gulpfile.babel.js ]] && gulp styles')
                         run('./manage.py collectstatic --noinput')
 
                         requirements = run('pip freeze')
@@ -235,7 +244,8 @@ class Command(BaseCommand):
                         if not compressor:
                             sudo('./manage.py compileassets', user=project_folder)
 
-                        sudo('./manage.py migrate', user=project_folder)
+                        if 'migrations' in git_changes:
+                            sudo('./manage.py migrate', user=project_folder)
 
                         if watson:
                             sudo('./manage.py buildwatson', user=project_folder)
