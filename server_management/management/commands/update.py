@@ -227,8 +227,8 @@ class Command(BaseCommand):
                         remote['server'].get('settings_file', 'production')
                     )):
 
-                        if '.scss' in git_changes:
-                            sudo('[[ -e Gulpfile.js || -e Gulpfile.babel.js ]] && gulp styles')
+                        if '.scss' in git_changes or '.js' in git_changes:
+                            sudo('webpack')
 
                         run('./manage.py collectstatic --noinput')
 
