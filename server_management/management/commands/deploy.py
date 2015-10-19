@@ -156,6 +156,20 @@ class Command(BaseCommand):
                 ]
             },
             {
+                'title': 'Add NODE_ENV to ~/.bash_profile',
+                'ansible_arguments': {
+                    'module_name': 'lineinfile',
+                    'module_args': "dest=~/.bash_profile line='export NODE_ENV=production' insertafter='EOF' state=present",
+                }
+            },
+            {
+                'title': 'Source the .bash_profile',
+                'ansible_arguments': {
+                    'module_name': 'source',
+                    'module_args': '~/.bash_profile',
+                }
+            },
+            {
                 'title': 'Symlink Node.js',
                 'ansible_arguments': {
                     'module_name': 'file',
@@ -163,17 +177,10 @@ class Command(BaseCommand):
                 }
             },
             {
-                'title': 'Install bower with npm',
+                'title': 'Install webpack with npm',
                 'ansible_arguments': {
                     'module_name': 'npm',
-                    'module_args': 'name=bower global=yes'
-                }
-            },
-            {
-                'title': 'Install gulp with npm',
-                'ansible_arguments': {
-                    'module_name': 'npm',
-                    'module_args': 'name=gulp global=yes'
+                    'module_args': 'name=webpack global=yes'
                 }
             },
             {
@@ -604,10 +611,10 @@ class Command(BaseCommand):
                 }
             },
             {
-                'title': 'Compile CSS',
+                'title': 'Compile assets',
                 'ansible_arguments': {
                     'module_name': 'shell',
-                    'module_args': 'gulp styles chdir=/var/www/{project}'.format(
+                    'module_args': 'webpack chdir=/var/www/{project}'.format(
                         project=project_folder,
                     )
                 }
