@@ -50,8 +50,15 @@ def load_config(env):
     env.disable_known_hosts = True
     env.reject_unknown_hosts = False
 
-    # Ask the user if the server we are hosting on is AWS
-    aws_check = 'amazonaws.com' in env.host_string or confirm('Is this host on AWS?', default=False)
+    # If is_aws is explicitly declared, trust it.
+    if 'is_aws' in remote:
+        aws_check = remote['is_aws']
+    # Try to guess it from the hostname.
+    elif 'amazonaws.com' in env.host_string:
+        aws_check = True
+    # Dunno, ask the user.
+    else:
+        aws_check = confirm('Is this host on AWS?', default=False)
 
     if aws_check:
         if 'initial_user' in remote['server']:
