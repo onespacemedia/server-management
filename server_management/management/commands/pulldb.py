@@ -1,15 +1,13 @@
-from django.core.management.base import BaseCommand
-
-from _core import load_config
+from _core import load_config, ServerManagementBaseCommand
 
 from fabric.api import *
 
 
-class Command(BaseCommand):
+class Command(ServerManagementBaseCommand):
 
     def handle(self, *args, **options):
         # Load server config from project
-        config, remote = load_config(env)
+        config, remote = load_config(env, options["remote"])
 
         with settings(warn_only=True):
             # Dump the database on the server.

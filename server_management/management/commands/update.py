@@ -1,9 +1,8 @@
 from django.conf import settings as django_settings
-from django.core.management.base import BaseCommand
 from fabric.api import *
 from fabvenv import virtualenv
 
-from _core import load_config
+from _core import load_config, ServerManagementBaseCommand
 
 import datetime
 import json
@@ -12,7 +11,7 @@ import os
 import sys
 
 
-class Command(BaseCommand):
+class Command(ServerManagementBaseCommand):
 
     endpoint = "https://hooks.slack.com/services/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"
     channel = '#commits'
@@ -165,7 +164,7 @@ class Command(BaseCommand):
         self._notify_start()
 
         # Load server config from project
-        config, remote = load_config(env)
+        config, remote = load_config(env, options["remote"])
 
         # Set local project path
         local_project_path = django_settings.SITE_ROOT

@@ -29,7 +29,7 @@ The commands are all wrappers around [Ansible's](/ansible/ansible) [Python API](
 To install ``onespacemedia-server-management`` simply run:
 
     $ pip install onespacemedia-server-management
-    
+
 ## Configuration
 
 We need to add ``onespacemedia-server-management`` to our project, so add ``server_management`` to your ``INSTALLED_APPS``.
@@ -38,7 +38,7 @@ We need to add ``onespacemedia-server-management`` to our project, so add ``serv
         ...
         'server_management',
     ]
-    
+
 Next, you need to create a ``server.json`` file which contains the information about your remote server and your database. This will live in the project folder above ``manage.py``, you can print the exact location with ``settings.SITE_ROOT``. Some example files are below:
 
 ### Single host
@@ -57,7 +57,8 @@ Next, you need to create a ``server.json`` file which contains the information a
                 "name": "example_prod",
                 "user": "example_prod_user",
                 "password": ""
-            }
+            },
+            "is_aws": false,
         }
     }
 
@@ -83,6 +84,7 @@ Please note that the `remote` key changes to `remotes`.
                     "name": "example_prod",
                     "user": "example_prod_user"
                 }
+                "is_aws": false,
             },
             "production": {
                 "server": {
@@ -97,6 +99,7 @@ Please note that the `remote` key changes to `remotes`.
         }
     }
 
+When running one of the management commands, you will be prompted for a remote host on which to perform the operation. To skip this prompt, specify the _name_ of the remote as a positional argument. For example, if you wanted to update the host named as `production` above, you would use `manage.py deploy production`.
 
 The default PostgreSQL deployment uses trust authentication for connecting to the database, so a password is not usually required.
 
@@ -104,7 +107,6 @@ Update your ``STATIC_ROOT`` and ``MEDIA_ROOT`` to match the format the scripts e
 
     STATIC_ROOT = "/var/www/example_static"
     MEDIA_ROOT = "/var/www/example_media"
-
 
 ## Usage
 
@@ -145,7 +147,6 @@ The deploy script is the most complex command in the library, but saves many man
 	* Installs ``bower`` with ``npm``.
 	* Installs ``gulp`` with ``npm``.
 	* Installs ``virtualenv`` with pip.
-	* 
 * PostgreSQL actions:
 	* Installs PostgreSQL with the following packages:
 	    * ``postgresql-9.3``
@@ -189,7 +190,7 @@ The deploy script is the most complex command in the library, but saves many man
 	* Dumps the local database, uploads it and imports it.
 	* Uploads the local media files to the remote server.
 
-	
+
 ### PullDB
 * Dumps the database on the remote server to an SQL file.
 * Pulls the database file down the the local machine (using ``scp``).

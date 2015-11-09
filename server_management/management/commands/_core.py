@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.management.base import BaseCommand
 
 from fabric.api import hide, prompt, run, settings as fabric_settings
 from fabric.contrib.console import confirm
@@ -7,7 +8,18 @@ import ansible.runner
 import ansible.inventory
 
 
-def load_config(env):
+class ServerManagementBaseCommand(BaseCommand):
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "remote",
+            metavar="REMOTE",
+            type=str,
+            help="remote host",
+            nargs="?",
+        )
+
+
+def load_config(env, remote=None):
     env['sudo_prefix'] += '-H '
 
     # Load the json file
@@ -27,12 +39,17 @@ def load_config(env):
     elif 'remotes' in config:
         # Prompt for a host selection.
         remote_keys = config['remotes'].keys()
-
         if len(remote_keys) == 0:
             print "No remotes specified in config."
             exit()
         elif len(remote_keys) == 1:
             remote_prompt = remote_keys[0]
+
+        elif remote:
+            remote_prompt = remote
+            if not remote_prompt in remote_keys:
+                raise Exception("Invalid remote name `{}`.".format(remote))
+                exit()
         else:
             print "Available hosts: {}".format(
                 ', '.join(config['remotes'].keys())
@@ -50,8 +67,15 @@ def load_config(env):
     env.disable_known_hosts = True
     env.reject_unknown_hosts = False
 
-    # Ask the user if the server we are hosting on is AWS
-    aws_check = 'amazonaws.com' in env.host_string or confirm('Is this host on AWS?', default=False)
+    # If is_aws is explicitly declared, trust it.
+    if 'is_aws' in remote:
+        aws_check = remote['is_aws']
+    # Try to guess it from the hostname.
+    elif 'amazonaws.com' in env.host_string:
+        aws_check = True
+    # Dunno, ask the user.
+    else:
+        aws_check = confirm('Is this host on AWS?', default=False)
 
     if aws_check:
         if 'initial_user' in remote['server']:

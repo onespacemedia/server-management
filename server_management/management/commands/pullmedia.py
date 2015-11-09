@@ -1,16 +1,15 @@
 from django.conf import settings as django_settings
-from django.core.management.base import BaseCommand
 from fabric.api import *
 
-from _core import load_config
+from _core import load_config, ServerManagementBaseCommand
 import os
 
 
-class Command(BaseCommand):
+class Command(ServerManagementBaseCommand):
 
     def handle(self, *args, **options):
         # Load server config from project
-        config, remote = load_config(env)
+        config, remote = load_config(env, options["remote"])
 
         # Set local project path
         local_project_path = django_settings.SITE_ROOT
