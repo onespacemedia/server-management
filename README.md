@@ -99,6 +99,7 @@ Please note that the `remote` key changes to `remotes`.
         }
     }
 
+When running one of the management commands, you will be prompted for a remote host on which to perform the operation. To skip this prompt, specify the _name_ of the remote as a positional argument. For example, if you wanted to update the host named as `production` above, you would use `manage.py deploy production`.
 
 The default PostgreSQL deployment uses trust authentication for connecting to the database, so a password is not usually required.
 
@@ -106,7 +107,6 @@ Update your ``STATIC_ROOT`` and ``MEDIA_ROOT`` to match the format the scripts e
 
     STATIC_ROOT = "/var/www/example_static"
     MEDIA_ROOT = "/var/www/example_media"
-
 
 ## Usage
 

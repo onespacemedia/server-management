@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.management.base import BaseCommand
 
 from fabric.api import hide, prompt, run, settings as fabric_settings
 from fabric.contrib.console import confirm
@@ -7,7 +8,18 @@ import ansible.runner
 import ansible.inventory
 
 
-def load_config(env):
+class ServerManagementBaseCommand(BaseCommand):
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "remote",
+            metavar="REMOTE",
+            type=str,
+            help="remote host",
+            nargs="?",
+        )
+
+
+def load_config(env, remote=None):
     env['sudo_prefix'] += '-H '
 
     # Load the json file
@@ -27,12 +39,17 @@ def load_config(env):
     elif 'remotes' in config:
         # Prompt for a host selection.
         remote_keys = config['remotes'].keys()
-
         if len(remote_keys) == 0:
             print "No remotes specified in config."
             exit()
         elif len(remote_keys) == 1:
             remote_prompt = remote_keys[0]
+
+        elif remote:
+            remote_prompt = remote
+            if not remote_prompt in remote_keys:
+                raise Exception("Invalid remote name `{}`.".format(remote))
+                exit()
         else:
             print "Available hosts: {}".format(
                 ', '.join(config['remotes'].keys())
