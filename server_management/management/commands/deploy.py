@@ -54,6 +54,10 @@ class Command(ServerManagementBaseCommand):
         # Use the site domain as a fallback domain
         fallback_domain_name = raw_input("What should the default domain be? ({}) ".format(django_settings.SITE_DOMAIN)) or django_settings.SITE_DOMAIN
 
+        # Override username (for DO hosts).
+        if env.user == 'deploy':
+            env.user = 'root'
+
         # Print some information for the user
         print ""
         print "Project: {}".format(project_folder)
@@ -153,20 +157,6 @@ class Command(ServerManagementBaseCommand):
                     'libgeoip-dev',
                     'libmysqlclient-dev',
                 ]
-            },
-            {
-                'title': 'Add NODE_ENV to ~/.bash_profile',
-                'ansible_arguments': {
-                    'module_name': 'lineinfile',
-                    'module_args': "dest=~/.bash_profile line='export NODE_ENV=production' insertafter='EOF' state=present",
-                }
-            },
-            {
-                'title': 'Source the .bash_profile',
-                'ansible_arguments': {
-                    'module_name': 'source',
-                    'module_args': '~/.bash_profile',
-                }
             },
             {
                 'title': 'Symlink Node.js',
