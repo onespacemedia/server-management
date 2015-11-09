@@ -227,8 +227,8 @@ class Command(BaseCommand):
                         remote['server'].get('settings_file', 'production')
                     )):
 
-                        if '.scss' in git_changes or '.js' in git_changes:
-                            sudo('webpack')
+                        if 'assets/' in git_changes:
+                            run('NODE_ENV=production webpack')
 
                         run('./manage.py collectstatic --noinput')
 
