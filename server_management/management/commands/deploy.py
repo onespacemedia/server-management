@@ -329,8 +329,8 @@ class Command(ServerManagementBaseCommand):
                     'module_name': 'postgresql_db',
                     'module_args': "name='{}' encoding='UTF-8' lc_collate='en_GB.UTF-8' lc_ctype='en_GB.UTF-8' "
                                    "template='template0' state=present".format(
-                                       remote['database']['name']
-                                   ),
+                        remote['database']['name']
+                    ),
                     'sudo_user': 'postgres'
                 }
             },
@@ -648,70 +648,70 @@ class Command(ServerManagementBaseCommand):
             {
                 'title': 'Create the .htpasswd file',
                 'ansible_arguments': {
-                    'module_name':  'htpasswd',
+                    'module_name': 'htpasswd',
                     'module_args': ' path=/etc/nginx/htpasswd name=onespace password=media owner=root group=root mode=0644'
-                    }
-                },
+                }
+            },
             {
                 'title': "Ensure that the default site is disabled",
                 'ansible_arguments': {
                     'module_name': 'command',
                     'module_args': 'rm /etc/nginx/sites-enabled/default removes=/etc/nginx/sites-enabled/default'
-                    }
-                },
+                }
+            },
             {
                 'title': "Ensure that the application site is enabled",
                 'ansible_arguments': {
                     'module_name': 'command',
                     'module_args': 'ln -s /etc/nginx/sites-available/{project} /etc/nginx/sites-enabled/{project} creates=/etc/nginx/sites-enabled/{project}'.format(
                         project=project_folder
-                        )
-                    }
-                },
+                    )
+                }
+            },
             {
                 'title': "Reload Nginx",
                 'ansible_arguments': {
                     'module_name': 'command',
                     'module_args': 'service nginx reload'
-                    }
-                },
+                }
+            },
             {
                 'title': "Ensure Nginx service is started",
                 'ansible_arguments': {
                     'module_name': 'service',
                     'module_args': 'name=nginx state=started enabled=yes'
-                    }
-                },
-            ]
+                }
+            },
+        ]
         run_tasks(env, nginx_tasks)
 
         # Define supervisor tasks
         supervisor_tasks = [
-                {
-                    'title': "Create the Supervisor config file",
-                    'ansible_arguments': {
-                        'module_name': 'copy',
-                        'module_args': 'src={} dest=/etc/supervisor/conf.d/{}.conf backup=yes'.format(
-                            session_files['supervisor_config'].name,
-                            project_folder
-                            )
-                        }
-                    },
-                {
-                    'title': "Re-read the Supervisor config files",
-                    'ansible_arguments': {
-                        'module_name': 'command',
-                        'module_args': 'supervisorctl reread'
-                        }
-                    },
-                {
-                    'title': "Update Supervisor to add the app in the process group",
-                    'ansible_arguments': {
-                        'module_name': 'command',
-                        'module_args': 'supervisorctl update'
-                        }
-                    },
-                ]
+            {
+                'title': "Create the Supervisor config file",
+                'ansible_arguments': {
+                    'module_name': 'copy',
+                    'module_args': 'src={} dest=/etc/supervisor/conf.d/{}.conf backup=yes'.format(
+                        session_files['supervisor_config'].name,
+                        project_folder
+                    )
+                }
+            },
+            {
+                'title': "Re-read the Supervisor config files",
+                'ansible_arguments': {
+                    'module_name': 'command',
+                    'module_args': 'supervisorctl reread'
+                }
+            },
+            {
+                'title': "Update Supervisor to add the app in the process group",
+                'ansible_arguments': {
+                    'module_name': 'command',
+                    'module_args': 'supervisorctl update'
+                }
+            },
+        ]
         run_tasks(env, supervisor_tasks)
 
         # Delete files
