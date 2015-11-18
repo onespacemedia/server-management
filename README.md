@@ -51,6 +51,7 @@ Next, you need to create a ``server.json`` file which contains the information a
         },
         "remote": {
             "server": {
+                "build_system": "npm",
                 "ip": "12.34.45.78"
             },
             "database": {

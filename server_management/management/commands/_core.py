@@ -1,6 +1,7 @@
+from optparse import make_option
+
 from django.conf import settings
 from django.core.management.base import BaseCommand
-
 from fabric.api import hide, prompt, run, settings as fabric_settings
 from fabric.contrib.console import confirm
 import json
@@ -9,17 +10,17 @@ import ansible.inventory
 
 
 class ServerManagementBaseCommand(BaseCommand):
-    def add_arguments(self, parser):
-        parser.add_argument(
-            "remote",
-            metavar="REMOTE",
-            type=str,
-            help="remote host",
-            nargs="?",
-        )
+    option_list = BaseCommand.option_list + (
+        make_option(
+            '--remote',
+            dest='remote',
+            default=None,
+            help='remote host'
+        ),
+    )
 
 
-def load_config(env, remote=None):
+def load_config(env, remote=None, config_user='deploy'):
     env['sudo_prefix'] += '-H '
 
     # Load the json file
@@ -29,7 +30,8 @@ def load_config(env, remote=None):
         ))
         config = json.load(json_data)
     except:
-        raise Exception("Something is wrong with the server.json file, make sure it exists and is valid JSON.")
+        raise Exception(
+            "Something is wrong with the server.json file, make sure it exists and is valid JSON.")
 
     # Define current host from settings in server config
     # First check if there is a single remote or multiple.
@@ -55,7 +57,8 @@ def load_config(env, remote=None):
                 ', '.join(config['remotes'].keys())
             )
 
-            remote_prompt = prompt("Please enter a remote: ", default=remote_keys[0])
+            remote_prompt = prompt("Please enter a remote: ",
+                                   default=remote_keys[0])
 
         env.host_string = config['remotes'][remote_prompt]['server']['ip']
         remote = config['remotes'][remote_prompt]
@@ -63,7 +66,7 @@ def load_config(env, remote=None):
         print "No remotes specified in config."
         exit()
 
-    env.user = 'deploy'
+    env.user = config_user
     env.disable_known_hosts = True
     env.reject_unknown_hosts = False
 
@@ -103,8 +106,10 @@ def load_config(env, remote=None):
 
 
 def check_request(request, env, request_type, color='\033[95m'):
-    if len(request['dark']) or request['contacted'][env.host_string].get('failed', None) is True:
-        print "[{}{}\033[0m] [\033[91mFAILED\033[0m]".format(color, request_type)
+    if len(request['dark']) or request['contacted'][env.host_string].get(
+            'failed', None) is True:
+        print "[{}{}\033[0m] [\033[91mFAILED\033[0m]".format(color,
+                                                             request_type)
         print request
         exit()
     else:
@@ -152,7 +157,8 @@ def run_tasks(env, tasks):
                 print "[\033[94mITEM\033[0m] {}".format(item)
 
                 # Format args with item
-                task['ansible_arguments']['module_args'] = module_args_pattern.format(
+                task['ansible_arguments'][
+                    'module_args'] = module_args_pattern.format(
                     item=item
                 )
 
