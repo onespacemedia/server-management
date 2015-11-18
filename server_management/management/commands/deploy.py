@@ -16,7 +16,7 @@ class Command(ServerManagementBaseCommand):
 
     def handle(self, *args, **options):
         # Load server config from project
-        config, remote = load_config(env, options["remote"])
+        config, remote = load_config(env, options["remote"], config_user='root')
 
         # Set local project path
         local_project_path = django_settings.SITE_ROOT
@@ -149,6 +149,7 @@ class Command(ServerManagementBaseCommand):
                     'git',
                     'python-dev',
                     'python-pip',
+                    'python-passlib',
                     'supervisor',
                     'libjpeg-dev',
                     'libffi-dev',
@@ -157,20 +158,6 @@ class Command(ServerManagementBaseCommand):
                     'libgeoip-dev',
                     'libmysqlclient-dev',
                 ]
-            },
-            {
-                'title': 'Symlink Node.js',
-                'ansible_arguments': {
-                    'module_name': 'file',
-                    'module_args': 'src=/usr/bin/nodejs dest=/usr/bin/node state=link'
-                }
-            },
-            {
-                'title': 'Install webpack with npm',
-                'ansible_arguments': {
-                    'module_name': 'npm',
-                    'module_args': 'name=webpack global=yes'
-                }
             },
             {
                 'title': "Install virtualenv",
@@ -590,24 +577,6 @@ class Command(ServerManagementBaseCommand):
                     )
                 }
             },
-            {
-                'title': 'Install npm packages',
-                'ansible_arguments': {
-                    'module_name': 'npm',
-                    'module_args': 'path=/var/www/{project}'.format(
-                        project=project_folder
-                    )
-                }
-            },
-            {
-                'title': 'Compile assets',
-                'ansible_arguments': {
-                    'module_name': 'shell',
-                    'module_args': 'webpack chdir=/var/www/{project}'.format(
-                        project=project_folder,
-                    )
-                }
-            }
         ]
 
         run_tasks(env, requirement_tasks)
@@ -713,6 +682,51 @@ class Command(ServerManagementBaseCommand):
             },
         ]
         run_tasks(env, supervisor_tasks)
+
+        # Define build system tasks
+        build_systems = {
+            "none": [],
+            "npm": [
+                {
+                    'title': 'Symlink Node.js',
+                    'ansible_arguments': {
+                        'module_name': 'file',
+                        'module_args': 'src=/usr/bin/nodejs dest=/usr/bin/node state=link'
+                    }
+                },
+                {
+                    'title': 'Install npm packages',
+                    'ansible_arguments': {
+                        'module_name': 'npm',
+                        'module_args': 'path=/var/www/{project}'.format(
+                            project=project_folder
+                        )
+                    }
+                },
+                {
+                    'title': 'Initiate build',
+                    'ansible_arguments': {
+                        'module_name': 'shell',
+                        'module_args': 'npm run build chdir=/var/www/{project}'.format(
+                            project=project_folder,
+                        )
+                    }
+                },
+                {
+                    'title': "Collect static files",
+                    'ansible_arguments': {
+                        'module_name': 'django_manage',
+                        'module_args': 'command=collectstatic app_path=/var/www/{project} virtualenv=/var/www/{project}/.venv settings={project}.settings.{settings}'.format(
+                            project=project_folder,
+                            settings=remote['server'].get('settings_file',
+                                                          'production'),
+                        )
+                    }
+                }
+            ]
+
+        }
+        run_tasks(env, build_systems[remote['server'].get('build_system', 'none')])
 
         # Delete files
         for session_file in session_files:

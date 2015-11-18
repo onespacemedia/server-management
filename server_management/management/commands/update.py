@@ -227,7 +227,7 @@ class Command(ServerManagementBaseCommand):
                     )):
 
                         if 'assets/' in git_changes:
-                            run('NODE_ENV=production webpack')
+                            run('npm run build')
 
                         run('./manage.py collectstatic --noinput')
 
