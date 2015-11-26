@@ -250,6 +250,7 @@ class Command(ServerManagementBaseCommand):
                             sudo('./manage.py buildwatson', user=project_folder)
 
                         sudo('supervisorctl restart {}'.format(project_folder))
+                        sudo('service memcached restart')
                         sudo('chown {}:webapps -R /var/www/*'.format(project_folder))
 
         # Register the release with Opbeat.
