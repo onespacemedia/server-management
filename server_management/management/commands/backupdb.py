@@ -9,7 +9,7 @@ class Command(ServerManagementBaseCommand):
 
     def handle(self, *args, **options):
         # Load server config from project
-        config, remote = load_config(env, options["remote"])
+        config, remote = load_config(env, options.get('remote', ''))
 
         with settings(warn_only=True):
             # Dump the database on the server.

@@ -16,7 +16,7 @@ class Command(ServerManagementBaseCommand):
 
     def handle(self, *args, **options):
         # Load server config from project
-        config, remote = load_config(env, options["remote"], config_user='root')
+        config, remote = load_config(env, options.get('remote', ''), config_user='root')
 
         # Set local project path
         local_project_path = django_settings.SITE_ROOT
@@ -26,10 +26,22 @@ class Command(ServerManagementBaseCommand):
             with lcd(local_project_path):
 
                 # Get the Git repo URL.
-                git_remote = local('git config --get remote.origin.url', capture=True)
+                remotes = local('git remote', capture=True).split('\n')
+
+                if len(remotes) == 1:
+                    git_remote = local('git config --get remote.{}.url'.format(remotes[0]), capture=True)
+                else:
+                    def validate_choice(choice):
+                        if choice in remotes:
+                            return choice
+                        raise Exception("That is not a valid choice.")
+
+                    choice = prompt("Which Git remote would you like to use?", validate=validate_choice)
+                    git_remote = local('git config --get remote.{}.url'.format(choice), capture=True)
 
                 # Is this a bitbucket repo?
                 is_bitbucket_repo = 'git@bitbucket.org' in git_remote
+                is_github_repo = 'github.com' in git_remote
 
                 if is_bitbucket_repo:
                     bb_regex = re.match(r'git@bitbucket\.org:(.+)/(.+)\.git', git_remote)
@@ -37,11 +49,24 @@ class Command(ServerManagementBaseCommand):
                     if bb_regex:
                         bitbucket_account = bb_regex.group(1)
                         bitbucket_repo = bb_regex.group(2)
+                    else:
+                        print 'Unable to determine Bitbucket details.'
+                        exit()
 
-                project_folder = local(
-                    "basename $( find {} -name 'wsgi.py' -not -path '*/.venv/*' -not -path '*/venv/*' | xargs -0 -n1 dirname )".format(
-                        local_project_path
-                    ), capture=True)
+                elif is_github_repo:
+                    gh_regex = re.match(r'(?:git@|https:\/\/)github.com[:/]([\w-]+)/([\w-]+)\.git$', git_remote)
+
+                    if gh_regex:
+                        github_account = gh_regex.group(1)
+                        github_repo = gh_regex.group(2)
+                    else:
+                        print 'Unable to determine Github details.'
+                        exit()
+                else:
+                    print 'Unable to determine Git host from remote URL: {}'.format(git_remote)
+                    exit()
+
+                project_folder = local_project_path.replace(os.path.abspath(os.path.join(local_project_path, '..')) + '/', '')
 
                 with settings(warn_only=True):
                     if local('[[ -e ../requirements.txt ]]').return_code:
@@ -65,14 +90,20 @@ class Command(ServerManagementBaseCommand):
         print "Server user: {}".format(env.user)
         print ""
 
-        # Get bitbucket details
+        # Get BitBucket / Github details
 
-        if os.environ.get('BITBUCKET_USERNAME', False) and os.environ.get('BITBUCKET_PASSWORD', False):
-            bitbucket_username = os.environ.get('BITBUCKET_USERNAME')
-            bitbucket_password = os.environ.get('BITBUCKET_PASSWORD')
-        else:
-            bitbucket_username = prompt("Please enter your BitBucket username:")
-            bitbucket_password = getpass("Please enter your BitBucket password: ")
+        if is_bitbucket_repo:
+            if os.environ.get('BITBUCKET_USERNAME', False) and os.environ.get('BITBUCKET_PASSWORD', False):
+                bitbucket_username = os.environ.get('BITBUCKET_USERNAME')
+                bitbucket_password = os.environ.get('BITBUCKET_PASSWORD')
+            else:
+                bitbucket_username = prompt("Please enter your BitBucket username:")
+                bitbucket_password = getpass("Please enter your BitBucket password: ")
+        elif is_github_repo:
+            if os.environ.get('GITHUB_TOKEN', False):
+                github_token = os.environ.get('GITHUB_TOKEN')
+            else:
+                github_token = prompt("Please enter your Github token (obtained from https://github.com/settings/tokens):")
 
         print ""
 
@@ -382,53 +413,77 @@ class Command(ServerManagementBaseCommand):
 
         print ""
         # Get the current SSH keys in the repo
-        print "[\033[95mTASK\033[0m] Checking bitbucket repository for an existing SSH key..."
-        try:
-            repo_ssh_keys = requests.get('https://bitbucket.org/api/1.0/repositories/{}/{}/deploy-keys/'.format(
-                bitbucket_account,
-                bitbucket_repo
-            ), auth=(bitbucket_username, bitbucket_password))
-        except:
-            print "[\033[95mTASK\033[0m] [\033[91mFAILED\033[0m]"
-            exit()
-        print "[\033[95mTASK\033[0m] [\033[92mDONE\033[0m]"
-
-        print ""
-
-        if repo_ssh_keys.text.find(ssh_key) == -1:
-            print "[\033[95mTASK\033[0m] Adding the SSH key to bitbucket..."
-
+        if is_bitbucket_repo:
+            print "[\033[95mTASK\033[0m] Checking bitbucket repository for an existing SSH key..."
             try:
-                requests.post(
-                    'https://bitbucket.org/api/1.0/repositories/{}/{}/deploy-keys/'.format(
-                        bitbucket_account,
-                        bitbucket_repo
-                    ),
-                    data=urlencode({
-                        'label': 'Remote Server',
-                        'key': ssh_key
-                    }),
-                    auth=(bitbucket_username, bitbucket_password)
-                )
-            except Exception as error:
-                raise error
+                repo_ssh_keys = requests.get('https://bitbucket.org/api/1.0/repositories/{}/{}/deploy-keys/'.format(
+                    bitbucket_account,
+                    bitbucket_repo
+                ), auth=(bitbucket_username, bitbucket_password))
+            except:
                 print "[\033[95mTASK\033[0m] [\033[91mFAILED\033[0m]"
                 exit()
             print "[\033[95mTASK\033[0m] [\033[92mDONE\033[0m]"
 
             print ""
 
+            if repo_ssh_keys.text.find(ssh_key) == -1:
+                print "[\033[95mTASK\033[0m] Adding the SSH key to bitbucket..."
+
+                try:
+                    requests.post(
+                        'https://bitbucket.org/api/1.0/repositories/{}/{}/deploy-keys/'.format(
+                            bitbucket_account,
+                            bitbucket_repo
+                        ),
+                        data=urlencode({
+                            'label': 'Remote Server',
+                            'key': ssh_key
+                        }),
+                        auth=(bitbucket_username, bitbucket_password)
+                    )
+                except Exception as error:
+                    raise error
+                    print "[\033[95mTASK\033[0m] [\033[91mFAILED\033[0m]"
+                    exit()
+                print "[\033[95mTASK\033[0m] [\033[92mDONE\033[0m]"
+
+                print ""
+
+        elif is_github_repo:
+            print "[\033[95mTASK\033[0m] Adding the SSH key to Github..."
+
+            try:
+                requests.post('https://api.github.com/repos/{}/{}/keys'.format(github_account, github_repo), json={
+                    'title': 'Remote Server',
+                    'key': ssh_key,
+                    'read_only': True
+                }, headers={
+                    'Authorization': 'token {}'.format(github_token)
+                })
+            except Exception as e:
+                print e.errors
+                print "[\033[95mTASK\033[0m] [\033[91mFAILED\033[0m]"
+
         # Define git tasks
+        if is_bitbucket_repo:
+            git_url = "git@bitbucket.org:{}/{}.git".format(
+                bitbucket_account,
+                bitbucket_repo
+            )
+        elif is_github_repo:
+            git_url = 'git@github.com:{}/{}.git'.format(
+                github_account,
+                github_repo
+            )
+
         git_tasks = [
             {
                 'title': "Setup the Git repo",
                 'ansible_arguments': {
                     'module_name': 'git',
                     'module_args': 'repo={} dest={} accept_hostkey=yes ssh_opts="-o StrictHostKeyChecking=no"'.format(
-                        "git@bitbucket.org:{}/{}.git".format(
-                            bitbucket_account,
-                            bitbucket_repo
-                        ),
+                        git_url,
                         "/var/www/{}".format(
                             project_folder
                         )
