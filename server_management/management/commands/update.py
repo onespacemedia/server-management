@@ -164,7 +164,7 @@ class Command(ServerManagementBaseCommand):
         self._notify_start()
 
         # Load server config from project
-        config, remote = load_config(env, options["remote"])
+        config, remote = load_config(env, options.get('remote', ''))
 
         # Set local project path
         local_project_path = django_settings.SITE_ROOT
@@ -250,6 +250,7 @@ class Command(ServerManagementBaseCommand):
                             sudo('./manage.py buildwatson', user=project_folder)
 
                         sudo('supervisorctl restart {}'.format(project_folder))
+                        sudo('service memcached restart')
                         sudo('chown {}:webapps -R /var/www/*'.format(project_folder))
 
         # Register the release with Opbeat.

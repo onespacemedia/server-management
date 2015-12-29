@@ -7,6 +7,7 @@ from fabric.contrib.console import confirm
 import json
 import ansible.runner
 import ansible.inventory
+import sys
 
 
 class ServerManagementBaseCommand(BaseCommand):
@@ -49,7 +50,7 @@ def load_config(env, remote=None, config_user='deploy'):
 
         elif remote:
             remote_prompt = remote
-            if not remote_prompt in remote_keys:
+            if remote_prompt not in remote_keys:
                 raise Exception("Invalid remote name `{}`.".format(remote))
                 exit()
         else:
@@ -93,6 +94,8 @@ def load_config(env, remote=None, config_user='deploy'):
             key = prompt('Please enter the path to the AWS key pair: ')
             if key:
                 env.key_filename = key
+    elif sys.argv[1] == 'deploy' and 'initial_user' in remote['server']:
+        env.user = remote['server']['initial_user']
 
     # Make sure we can connect to the server
     with hide('output', 'running', 'warnings'):
