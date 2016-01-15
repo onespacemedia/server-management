@@ -14,7 +14,7 @@ import sys
 class Command(ServerManagementBaseCommand):
 
     endpoint = "https://hooks.slack.com/services/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"
-    channel = '#commits'
+    channel = '#deployments'
     bot_name = "Update Bot"
     bot_emoji = ":neckbeard:"
     current_commit = os.popen("git rev-parse --short HEAD").read().strip()
