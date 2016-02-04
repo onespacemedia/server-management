@@ -147,6 +147,20 @@ class Command(ServerManagementBaseCommand):
                 }
             },
             {
+                'title': "Add nodesource key",
+                'ansible_arguments': {
+                    'module_name': 'apt_key',
+                    'module_args': 'url=https://deb.nodesource.com/gpgkey/nodesource.gpg.key'
+                }
+            },
+            {
+                'title': "Add nodesource repo",
+                'ansible_arguments': {
+                    'module_name': 'apt_repository',
+                    'module_args': 'repo="deb https://deb.nodesource.com/node_5.x trusty main" update_cache=yes'
+                }
+            },
+            {
                 'title': 'Install unattended-upgrades',
                 'ansible_arguments': {
                     'module_name': 'apt',
@@ -184,7 +198,7 @@ class Command(ServerManagementBaseCommand):
                     'supervisor',
                     'libjpeg-dev',
                     'libffi-dev',
-                    'npm',
+                    'nodejs',
                     'memcached',
                     'libgeoip-dev',
                     'libmysqlclient-dev',
@@ -610,16 +624,6 @@ class Command(ServerManagementBaseCommand):
                     'module_name': 'pip',
                     'module_args': 'virtualenv=/var/www/{project}/.venv name=gunicorn'.format(
                         project=project_folder
-                    )
-                }
-            },
-            {
-                'title': "Collect static files",
-                'ansible_arguments': {
-                    'module_name': 'django_manage',
-                    'module_args': 'command=collectstatic app_path=/var/www/{project} virtualenv=/var/www/{project}/.venv settings={project}.settings.{settings}'.format(
-                        project=project_folder,
-                        settings=remote['server'].get('settings_file', 'production'),
                     )
                 }
             },
