@@ -111,6 +111,7 @@ class Command(ServerManagementBaseCommand):
         session_files = {
             'gunicorn_start': NamedTemporaryFile(delete=False),
             'supervisor_config': NamedTemporaryFile(delete=False),
+            'memcached_supervisor_config': NamedTemporaryFile(delete=False),
             'nginx_site_config': NamedTemporaryFile(delete=False),
             'apt_periodic': NamedTemporaryFile(delete=False),
         }
@@ -126,6 +127,11 @@ class Command(ServerManagementBaseCommand):
             'project': project_folder
         }))
         session_files['supervisor_config'].close()
+
+        session_files['memcached_supervisor_config'].write(render_to_string('memcached_supervisor_config', {
+            'project': project_folder
+        }))
+        session_files['memcached_supervisor_config'].close()
 
         session_files['nginx_site_config'].write(render_to_string('nginx_site_config', {
             'project': project_folder,
@@ -724,12 +730,21 @@ class Command(ServerManagementBaseCommand):
         # Define supervisor tasks
         supervisor_tasks = [
             {
-                'title': "Create the Supervisor config file",
+                'title': "Create the Supervisor config file for the application",
                 'ansible_arguments': {
                     'module_name': 'copy',
                     'module_args': 'src={} dest=/etc/supervisor/conf.d/{}.conf backup=yes'.format(
                         session_files['supervisor_config'].name,
                         project_folder
+                    )
+                }
+            },
+            {
+                'title': "Create the Supervisor config file for memcached",
+                'ansible_arguments': {
+                    'module_name': 'copy',
+                    'module_args': 'src={} dest=/etc/supervisor/conf.d/memcached.conf backup=yes'.format(
+                        session_files['memcached_supervisor_config'].name
                     )
                 }
             },
