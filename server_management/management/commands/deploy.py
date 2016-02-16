@@ -224,6 +224,13 @@ class Command(ServerManagementBaseCommand):
                     'module_name': 'pip',
                     'module_args': 'name=virtualenv'
                 }
+            },
+            {
+                'title': "Set the timezone to UTC",
+                'ansible_arguments': {
+                    'module_name': 'file',
+                    'module_args': 'path=/usr/share/zoneinfo/UTC dest=/etc/localtime force=yes state=link'
+                }
             }
         ]
         run_tasks(env, base_tasks)
