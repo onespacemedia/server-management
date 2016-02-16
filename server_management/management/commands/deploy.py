@@ -206,7 +206,7 @@ class Command(ServerManagementBaseCommand):
                     'git',
                     'python-dev',
                     'python-pip',
-                    'python-passlib',
+                    'python-passlib',  # Required for generating the htpasswd file
                     'supervisor',
                     'libjpeg-dev',
                     'libffi-dev',
