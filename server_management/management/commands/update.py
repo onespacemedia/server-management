@@ -13,13 +13,19 @@ import sys
 
 class Command(ServerManagementBaseCommand):
 
-    endpoint = "https://hooks.slack.com/services/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"
-    channel = '#commits'
-    bot_name = "Update Bot"
-    bot_emoji = ":neckbeard:"
+    slack_endpoints = [
+        {
+            'url': "https://hooks.slack.com/services/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",
+            'channel': '#deployments',
+            'name': 'Update Bot',
+            'emoji': ':neckbeard:'
+        }
+    ]
+
     current_commit = os.popen("git rev-parse --short HEAD").read().strip()
     remote = os.popen("git config --get remote.origin.url").read().split(':')[1].split('.')[0]
     slack_enabled = True
+    remote = 'production'
 
     def _bitbucket_commit_url(self, commit):
         return "<https://bitbucket.org/{}/commits/{commit}|{commit}>".format(
@@ -40,39 +46,43 @@ class Command(ServerManagementBaseCommand):
 
         self.start_time = datetime.datetime.now()
 
-        requests.post(self.endpoint, data={
-            'payload': json.dumps({
-                'channel': self.channel,
-                'username': self.bot_name,
-                'icon_emoji': self.bot_emoji,
-                'attachments': [{
-                    'fallback': 'Update of {} has begun.'.format(django_settings.SITE_NAME),
-                    'color': '#22A7F0',
-                    'fields': [
-                        {
-                            'title': 'Project',
-                            'value': django_settings.SITE_NAME,
-                            'short': True,
-                        },
-                        {
-                            'title': 'Update status',
-                            'value': 'Started',
-                            'short': True,
-                        },
-                        {
-                            'title': 'Commit hash',
-                            'value': self._bitbucket_commit_url(self.current_commit),
-                            'short': True,
-                        },
-                        {
-                            'title': 'User',
-                            'value': os.popen("whoami").read().strip(),
-                            'short': True,
-                        }
-                    ]
-                }]
+        for endpoint in self.slack_endpoints:
+            requests.post(endpoint['url'], data={
+                'payload': json.dumps({
+                    'channel': endpoint['channel'],
+                    'username': endpoint['name'],
+                    'icon_emoji': endpoint['emoji'],
+                    'attachments': [{
+                        'fallback': 'Update of {} to {} has begun.'.format(
+                            django_settings.SITE_NAME,
+                            self.remote
+                        ),
+                        'color': '#22A7F0',
+                        'fields': [
+                            {
+                                'title': 'Project',
+                                'value': django_settings.SITE_NAME,
+                                'short': True,
+                            },
+                            {
+                                'title': 'Update status',
+                                'value': 'Started',
+                                'short': True,
+                            },
+                            {
+                                'title': 'Commit hash',
+                                'value': self._bitbucket_commit_url(self.current_commit),
+                                'short': True,
+                            },
+                            {
+                                'title': 'User',
+                                'value': os.popen("whoami").read().strip(),
+                                'short': True,
+                            }
+                        ]
+                    }]
+                })
             })
-        })
 
     def _notify_success(self):
         if not self.slack_enabled:
@@ -80,81 +90,86 @@ class Command(ServerManagementBaseCommand):
 
         self.end_time = datetime.datetime.now()
 
-        requests.post(self.endpoint, data={
-            'payload': json.dumps({
-                'channel': self.channel,
-                'username': self.bot_name,
-                'icon_emoji': self.bot_emoji,
-                'attachments': [{
-                    'fallback': 'Update of {} has completed successfully.'.format(django_settings.SITE_NAME),
-                    'color': 'good',
-                    'fields': [
-                        {
-                            'title': 'Project',
-                            'value': django_settings.SITE_NAME,
-                            'short': True,
-                        },
-                        {
-                            'title': 'Update status',
-                            'value': 'Successful',
-                            'short': True,
-                        },
-                        {
-                            'title': 'Duration',
-                            'value': '{}.{} seconds'.format(
-                                (self.end_time - self.start_time).seconds,
-                                str((self.end_time - self.start_time).microseconds)[:2],
-                            ),
-                            'short': True,
-                        },
-                        {
-                            'title': 'Commit range',
-                            'value': '{} to {} ({})'.format(
-                                self._bitbucket_commit_url(self.server_commit),
-                                self._bitbucket_commit_url(self.current_commit),
-                                self._bitbucket_diff_url(self.current_commit, self.server_commit)
-                            ),
-                            'short': True,
-                        }
-                    ]
-                }]
+        for endpoint in self.slack_endpoints:
+            requests.post(endpoint['url'], data={
+                'payload': json.dumps({
+                    'channel': endpoint['channel'],
+                    'username': endpoint['name'],
+                    'icon_emoji': endpoint['emoji'],
+                    'attachments': [{
+                        'fallback': 'Update of {} to {} has completed successfully.'.format(
+                            django_settings.SITE_NAME,
+                            self.remote
+                        ),
+                        'color': 'good',
+                        'fields': [
+                            {
+                                'title': 'Project',
+                                'value': django_settings.SITE_NAME,
+                                'short': True,
+                            },
+                            {
+                                'title': 'Update status',
+                                'value': 'Successful',
+                                'short': True,
+                            },
+                            {
+                                'title': 'Duration',
+                                'value': '{}.{} seconds'.format(
+                                    (self.end_time - self.start_time).seconds,
+                                    str((self.end_time - self.start_time).microseconds)[:2],
+                                ),
+                                'short': True,
+                            },
+                            {
+                                'title': 'Commit range',
+                                'value': '{} to {} ({})'.format(
+                                    self._bitbucket_commit_url(self.server_commit),
+                                    self._bitbucket_commit_url(self.current_commit),
+                                    self._bitbucket_diff_url(self.current_commit, self.server_commit)
+                                ),
+                                'short': True,
+                            }
+                        ]
+                    }]
+                })
             })
-        })
 
     def _notify_failed(self, message):
         if not self.slack_enabled:
             return
 
-        requests.post(self.endpoint, data={
-            'payload': json.dumps({
-                'channel': self.channel,
-                'username': self.bot_name,
-
-                'icon_emoji': self.bot_emoji,
-                'attachments': [{
-                    'fallback': 'Update of {} has failed'.format(
-                        django_settings.SITE_NAME,
-                    ),
-                    'color': 'danger',
-                    'fields': [
-                        {
-                            'title': 'Project',
-                            'value': django_settings.SITE_NAME,
-                            'short': True,
-                        },
-                        {
-                            'title': 'Update status',
-                            'value': 'Failed',
-                            'short': True,
-                        },
-                        {
-                            'title': 'Error message',
-                            'value': message,
-                        }
-                    ]
-                }]
+        for endpoint in self.slack_endpoints:
+            requests.post(endpoint['url'], data={
+                'payload': json.dumps({
+                    'channel': endpoint['channel'],
+                    'username': endpoint['name'],
+                    'icon_emoji': endpoint['emoji'],
+                    'attachments': [{
+                        'fallback': 'Update of {} to {} has failed'.format(
+                            django_settings.SITE_NAME,
+                            self.remote
+                        ),
+                        'color': 'danger',
+                        'fields': [
+                            {
+                                'title': 'Project',
+                                'value': django_settings.SITE_NAME,
+                                'short': True,
+                            },
+                            {
+                                'title': 'Update status',
+                                'value': 'Failed',
+                                'short': True,
+                            },
+                            {
+                                'title': 'Error message',
+                                'value': message,
+                            }
+                        ]
+                    }]
+                })
             })
-        })
 
     def handle_exception(self, exctype, value, traceback):
         self._notify_failed(str(value))
@@ -226,8 +241,8 @@ class Command(ServerManagementBaseCommand):
                         remote['server'].get('settings_file', 'production')
                     )):
 
-                        if 'assets/' in git_changes:
-                            run('npm run build')
+                        run('npm install')
+                        run('npm run build')
 
                         run('./manage.py collectstatic --noinput')
 
@@ -249,8 +264,7 @@ class Command(ServerManagementBaseCommand):
                         if watson:
                             sudo('./manage.py buildwatson', user=project_folder)
 
-                        sudo('supervisorctl restart {}'.format(project_folder))
-                        sudo('service memcached restart')
+                        sudo('supervisorctl restart all')
                         sudo('chown {}:webapps -R /var/www/*'.format(project_folder))
 
         # Register the release with Opbeat.

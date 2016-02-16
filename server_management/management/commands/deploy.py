@@ -111,6 +111,7 @@ class Command(ServerManagementBaseCommand):
         session_files = {
             'gunicorn_start': NamedTemporaryFile(delete=False),
             'supervisor_config': NamedTemporaryFile(delete=False),
+            'memcached_supervisor_config': NamedTemporaryFile(delete=False),
             'nginx_site_config': NamedTemporaryFile(delete=False),
             'apt_periodic': NamedTemporaryFile(delete=False),
         }
@@ -127,6 +128,11 @@ class Command(ServerManagementBaseCommand):
         }))
         session_files['supervisor_config'].close()
 
+        session_files['memcached_supervisor_config'].write(render_to_string('memcached_supervisor_config', {
+            'project': project_folder
+        }))
+        session_files['memcached_supervisor_config'].close()
+
         session_files['nginx_site_config'].write(render_to_string('nginx_site_config', {
             'project': project_folder,
             'domain_names': domain_names,
@@ -137,6 +143,12 @@ class Command(ServerManagementBaseCommand):
         session_files['apt_periodic'].write(render_to_string('apt_periodic'))
         session_files['apt_periodic'].close()
 
+        # Check if optional packages are defined in the config.
+        optional_packages = {}
+
+        if 'optional_packages' in config:
+            optional_packages = config['optional_packages']
+
         # Define base tasks
         base_tasks = [
             {
@@ -144,6 +156,20 @@ class Command(ServerManagementBaseCommand):
                 'ansible_arguments': {
                     'module_name': 'apt',
                     'module_args': 'update_cache=yes upgrade=yes'
+                }
+            },
+            {
+                'title': "Add nodesource key",
+                'ansible_arguments': {
+                    'module_name': 'apt_key',
+                    'module_args': 'url=https://deb.nodesource.com/gpgkey/nodesource.gpg.key'
+                }
+            },
+            {
+                'title': "Add nodesource repo",
+                'ansible_arguments': {
+                    'module_name': 'apt_repository',
+                    'module_args': 'repo="deb https://deb.nodesource.com/node_5.x trusty main" update_cache=yes'
                 }
             },
             {
@@ -165,7 +191,7 @@ class Command(ServerManagementBaseCommand):
             {
                 'title': 'Make sure unattended-upgrades only installs from $ubuntu_release-security',
                 'ansible_arguments': {
-                    'module_name':  'lineinfile',
+                    'module_name': 'lineinfile',
                     'module_args': 'dest=/etc/apt/apt.conf.d/50unattended-upgrades regexp="$ubuntu_release-updates" state=absent'
                 }
             },
@@ -180,15 +206,17 @@ class Command(ServerManagementBaseCommand):
                     'git',
                     'python-dev',
                     'python-pip',
-                    'python-passlib',
+                    'python-passlib',  # Required for generating the htpasswd file
                     'supervisor',
                     'libjpeg-dev',
                     'libffi-dev',
-                    'npm',
+                    'nodejs',
                     'memcached',
-                    'libgeoip-dev',
-                    'libmysqlclient-dev',
-                ]
+                ] + (
+                    ['libgeoip-dev'] if optional_packages.get('geoip', True) else []
+                ) + (
+                    ['libmysqlclient-dev'] if optional_packages.get('mysql', True) else []
+                )
             },
             {
                 'title': "Install virtualenv",
@@ -196,9 +224,85 @@ class Command(ServerManagementBaseCommand):
                     'module_name': 'pip',
                     'module_args': 'name=virtualenv'
                 }
+            },
+            {
+                'title': "Set the timezone to UTC",
+                'ansible_arguments': {
+                    'module_name': 'file',
+                    'module_args': 'path=/usr/share/zoneinfo/UTC dest=/etc/localtime force=yes state=link'
+                }
             }
         ]
         run_tasks(env, base_tasks)
+
+        # Configure the firewall.
+        firewall_tasks = [
+            {
+                'title': 'Allow SSH connections through the firewall',
+                'ansible_arguments': {
+                    'module_name': 'ufw',
+                    'module_args': 'rule=allow port=22 proto=tcp'
+                }
+            },
+            {
+                'title': 'Allow HTTP connections through the firewall',
+                'ansible_arguments': {
+                    'module_name': 'ufw',
+                    'module_args': 'rule=allow port=80 proto=tcp'
+                }
+            },
+            {
+                'title': 'Enable the firewall, deny all other traffic',
+                'ansible_arguments': {
+                    'module_name': 'ufw',
+                    'module_args': 'state=enabled policy=deny'
+                }
+            }
+        ]
+
+        run_tasks(env, firewall_tasks)
+
+        # Configure swap
+        swap_tasks = [
+            {
+                'title': 'Create a swap file',
+                'ansible_arguments': {
+                    'module_name': 'command',
+                    'module_args': 'fallocate -l 4G /swapfile'
+                }
+            },
+            {
+                'title': 'Set permissions on swapfile to 600',
+                'ansible_arguments': {
+                    'module_name': 'file',
+                    'module_args': 'path=/swapfile owner=root group=root mode=0600'
+                }
+
+            },
+            {
+                'title': 'Format swapfile for swap',
+                'ansible_arguments': {
+                    'module_name': 'command',
+                    'module_args': 'mkswap /swapfile'
+                }
+            },
+            {
+                'title': 'Add the file to the system as a swap file',
+                'ansible_arguments': {
+                    'module_name': 'command',
+                    'module_args': 'swapon /swapfile'
+                }
+            },
+            {
+                'title': 'Write fstab line for swapfile',
+                'ansible_arguments': {
+                    'module_name': 'mount',
+                    'module_args': 'name=none src=/swapfile fstype=swap opts=sw passno=0 dump=0 state=present'
+                }
+            }
+        ]
+
+        run_tasks(env, swap_tasks)
 
         # Define SSH tasks
         ssh_tasks = [
@@ -244,28 +348,28 @@ class Command(ServerManagementBaseCommand):
             {
                 'title': 'Remove sudo group rights',
                 'ansible_arguments': {
-                    'module_name':  'lineinfile',
+                    'module_name': 'lineinfile',
                     'module_args': 'dest=/etc/sudoers regexp="^%sudo" state=absent'
                 }
             },
             {
                 'title': 'Add deploy user to sudoers',
                 'ansible_arguments': {
-                    'module_name':  'lineinfile',
+                    'module_name': 'lineinfile',
                     'module_args': 'dest=/etc/sudoers regexp="deploy ALL" line="deploy ALL=(ALL:ALL) NOPASSWD: ALL" state=present'
                 }
             },
             {
                 'title': 'Disallow root SSH access',
                 'ansible_arguments': {
-                    'module_name':  'lineinfile',
+                    'module_name': 'lineinfile',
                     'module_args': 'dest=/etc/ssh/sshd_config regexp="^PermitRootLogin" line="PermitRootLogin no" state=present'
                 }
             },
             {
                 'title': 'Disallow password authentication',
                 'ansible_arguments': {
-                    'module_name':  'lineinfile',
+                    'module_name': 'lineinfile',
                     'module_args': 'dest=/etc/ssh/sshd_config regexp="^PasswordAuthentication" line="PasswordAuthentication no" state=present'
                 }
             },
@@ -347,8 +451,8 @@ class Command(ServerManagementBaseCommand):
                     'module_name': 'postgresql_db',
                     'module_args': "name='{}' encoding='UTF-8' lc_collate='en_GB.UTF-8' lc_ctype='en_GB.UTF-8' "
                                    "template='template0' state=present".format(
-                        remote['database']['name']
-                    ),
+                                       remote['database']['name']
+                                   ),
                     'sudo_user': 'postgres'
                 }
             },
@@ -372,6 +476,13 @@ class Command(ServerManagementBaseCommand):
                         remote['database']['name']
                     ),
                     'sudo_user': 'postgres'
+                }
+            },
+            {
+                'title': 'Pre-empt PostgreSQL breaking..',
+                'ansible_arguments': {
+                    'module_name': 'lineinfile',
+                    'module_args': 'dest=/etc/postgresql/9.3/main/pg_ctl.conf regexp="^pg_ctl_options" line="pg_ctl_options = \'-l /tmp/pg.log\'" state=present'
                 }
             },
         ]
@@ -437,7 +548,7 @@ class Command(ServerManagementBaseCommand):
                             bitbucket_repo
                         ),
                         data=urlencode({
-                            'label': 'Remote Server',
+                            'label': 'Application Server ({})'.format(env.host_string),
                             'key': ssh_key
                         }),
                         auth=(bitbucket_username, bitbucket_password)
@@ -455,7 +566,7 @@ class Command(ServerManagementBaseCommand):
 
             try:
                 requests.post('https://api.github.com/repos/{}/{}/keys'.format(github_account, github_repo), json={
-                    'title': 'Remote Server',
+                    'title': 'Application Server ({})'.format(env.host_string),
                     'key': ssh_key,
                     'read_only': True
                 }, headers={
@@ -614,16 +725,6 @@ class Command(ServerManagementBaseCommand):
                 }
             },
             {
-                'title': "Collect static files",
-                'ansible_arguments': {
-                    'module_name': 'django_manage',
-                    'module_args': 'command=collectstatic app_path=/var/www/{project} virtualenv=/var/www/{project}/.venv settings={project}.settings.{settings}'.format(
-                        project=project_folder,
-                        settings=remote['server'].get('settings_file', 'production'),
-                    )
-                }
-            },
-            {
                 'title': "Update media permissions",
                 'ansible_arguments': {
                     'module_name': 'file',
@@ -712,12 +813,21 @@ class Command(ServerManagementBaseCommand):
         # Define supervisor tasks
         supervisor_tasks = [
             {
-                'title': "Create the Supervisor config file",
+                'title': "Create the Supervisor config file for the application",
                 'ansible_arguments': {
                     'module_name': 'copy',
                     'module_args': 'src={} dest=/etc/supervisor/conf.d/{}.conf backup=yes'.format(
                         session_files['supervisor_config'].name,
                         project_folder
+                    )
+                }
+            },
+            {
+                'title': "Create the Supervisor config file for memcached",
+                'ansible_arguments': {
+                    'module_name': 'copy',
+                    'module_args': 'src={} dest=/etc/supervisor/conf.d/memcached.conf backup=yes'.format(
+                        session_files['memcached_supervisor_config'].name
                     )
                 }
             },
