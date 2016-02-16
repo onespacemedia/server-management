@@ -478,6 +478,13 @@ class Command(ServerManagementBaseCommand):
                     'sudo_user': 'postgres'
                 }
             },
+            {
+                'title': 'Pre-empt PostgreSQL breaking..',
+                'ansible_arguments': {
+                    'module_name': 'lineinfile',
+                    'module_args': 'dest=/etc/postgresql/9.3/main/pg_ctl.conf regexp="^pg_ctl_options" line="pg_ctl_options = \'-l /tmp/pg.log\'" state=present'
+                }
+            },
         ]
         run_tasks(env, db_tasks)
 
