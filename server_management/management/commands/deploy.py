@@ -254,6 +254,49 @@ class Command(ServerManagementBaseCommand):
         ]
 
         run_tasks(env, firewall_tasks)
+
+        # Configure swap
+        swap_tasks = [
+            {
+                'title': 'Create a swap file',
+                'ansible_arguments': {
+                    'module_name': 'command',
+                    'module_args': 'fallocate -l 4G /swapfile'
+                }
+            },
+            {
+                'title': 'Set permissions on swapfile to 600',
+                'ansible_arguments': {
+                    'module_name': 'file',
+                    'module_args': 'path=/swapfile owner=root group=root mode=0600'
+                }
+
+            },
+            {
+                'title': 'Format swapfile for swap',
+                'ansible_arguments': {
+                    'module_name': 'command',
+                    'module_args': 'mkswap /swapfile'
+                }
+            },
+            {
+                'title': 'Add the file to the system as a swap file',
+                'ansible_arguments': {
+                    'module_name': 'command',
+                    'module_args': 'swapon /swapfile'
+                }
+            },
+            {
+                'title': 'Write fstab line for swapfile',
+                'ansible_arguments': {
+                    'module_name': 'mount',
+                    'module_args': 'name=none src=/swapfile fstype=swap opts=sw passno=0 dump=0 state=present'
+                }
+            }
+        ]
+
+        run_tasks(env, swap_tasks)
+
         # Define SSH tasks
         ssh_tasks = [
             {
