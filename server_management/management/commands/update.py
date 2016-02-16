@@ -241,11 +241,8 @@ class Command(ServerManagementBaseCommand):
                         remote['server'].get('settings_file', 'production')
                     )):
 
-                        if 'package.json' in git_changes:
-                            run('npm install')
-
-                        if 'assets/' in git_changes:
-                            run('npm run build')
+                        run('npm install')
+                        run('npm run build')
 
                         run('./manage.py collectstatic --noinput')
 
