@@ -191,7 +191,7 @@ class Command(ServerManagementBaseCommand):
             {
                 'title': 'Make sure unattended-upgrades only installs from $ubuntu_release-security',
                 'ansible_arguments': {
-                    'module_name':  'lineinfile',
+                    'module_name': 'lineinfile',
                     'module_args': 'dest=/etc/apt/apt.conf.d/50unattended-upgrades regexp="$ubuntu_release-updates" state=absent'
                 }
             },
@@ -341,28 +341,28 @@ class Command(ServerManagementBaseCommand):
             {
                 'title': 'Remove sudo group rights',
                 'ansible_arguments': {
-                    'module_name':  'lineinfile',
+                    'module_name': 'lineinfile',
                     'module_args': 'dest=/etc/sudoers regexp="^%sudo" state=absent'
                 }
             },
             {
                 'title': 'Add deploy user to sudoers',
                 'ansible_arguments': {
-                    'module_name':  'lineinfile',
+                    'module_name': 'lineinfile',
                     'module_args': 'dest=/etc/sudoers regexp="deploy ALL" line="deploy ALL=(ALL:ALL) NOPASSWD: ALL" state=present'
                 }
             },
             {
                 'title': 'Disallow root SSH access',
                 'ansible_arguments': {
-                    'module_name':  'lineinfile',
+                    'module_name': 'lineinfile',
                     'module_args': 'dest=/etc/ssh/sshd_config regexp="^PermitRootLogin" line="PermitRootLogin no" state=present'
                 }
             },
             {
                 'title': 'Disallow password authentication',
                 'ansible_arguments': {
-                    'module_name':  'lineinfile',
+                    'module_name': 'lineinfile',
                     'module_args': 'dest=/etc/ssh/sshd_config regexp="^PasswordAuthentication" line="PasswordAuthentication no" state=present'
                 }
             },
@@ -444,8 +444,8 @@ class Command(ServerManagementBaseCommand):
                     'module_name': 'postgresql_db',
                     'module_args': "name='{}' encoding='UTF-8' lc_collate='en_GB.UTF-8' lc_ctype='en_GB.UTF-8' "
                                    "template='template0' state=present".format(
-                        remote['database']['name']
-                    ),
+                                       remote['database']['name']
+                                   ),
                     'sudo_user': 'postgres'
                 }
             },
