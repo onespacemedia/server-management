@@ -137,6 +137,12 @@ class Command(ServerManagementBaseCommand):
         session_files['apt_periodic'].write(render_to_string('apt_periodic'))
         session_files['apt_periodic'].close()
 
+        # Check if optional packages are defined in the config.
+        optional_packages = {}
+
+        if 'optional_packages' in config:
+            optional_packages = config['optional_packages']
+
         # Define base tasks
         base_tasks = [
             {
@@ -200,9 +206,11 @@ class Command(ServerManagementBaseCommand):
                     'libffi-dev',
                     'nodejs',
                     'memcached',
-                    'libgeoip-dev',
-                    'libmysqlclient-dev',
-                ]
+                ] + (
+                    ['libgeoip-dev'] if optional_packages.get('geoip', True) else []
+                ) + (
+                    ['libmysqlclient-dev'] if optional_packages.get('mysql', True) else []
+                )
             },
             {
                 'title': "Install virtualenv",
