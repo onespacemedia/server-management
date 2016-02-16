@@ -228,6 +228,32 @@ class Command(ServerManagementBaseCommand):
         ]
         run_tasks(env, base_tasks)
 
+        # Configure the firewall.
+        firewall_tasks = [
+            {
+                'title': 'Allow SSH connections through the firewall',
+                'ansible_arguments': {
+                    'module_name': 'ufw',
+                    'module_args': 'rule=allow port=22 proto=tcp'
+                }
+            },
+            {
+                'title': 'Allow HTTP connections through the firewall',
+                'ansible_arguments': {
+                    'module_name': 'ufw',
+                    'module_args': 'rule=allow port=80 proto=tcp'
+                }
+            },
+            {
+                'title': 'Enable the firewall, deny all other traffic',
+                'ansible_arguments': {
+                    'module_name': 'ufw',
+                    'module_args': 'state=enabled policy=deny'
+                }
+            }
+        ]
+
+        run_tasks(env, firewall_tasks)
         # Define SSH tasks
         ssh_tasks = [
             {
