@@ -534,7 +534,7 @@ class Command(ServerManagementBaseCommand):
                             bitbucket_repo
                         ),
                         data=urlencode({
-                            'label': 'Remote Server',
+                            'label': 'Application Server ({})'.format(env.host_string),
                             'key': ssh_key
                         }),
                         auth=(bitbucket_username, bitbucket_password)
@@ -552,7 +552,7 @@ class Command(ServerManagementBaseCommand):
 
             try:
                 requests.post('https://api.github.com/repos/{}/{}/keys'.format(github_account, github_repo), json={
-                    'title': 'Remote Server',
+                    'title': 'Application Server ({})'.format(env.host_string),
                     'key': ssh_key,
                     'read_only': True
                 }, headers={
