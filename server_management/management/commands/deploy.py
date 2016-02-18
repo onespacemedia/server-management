@@ -208,6 +208,7 @@ class Command(ServerManagementBaseCommand):
                     'python-pip',
                     'python-passlib',  # Required for generating the htpasswd file
                     'pypy',
+                    'pypy-dev',
                     'supervisor',
                     'libjpeg-dev',
                     'libffi-dev',
