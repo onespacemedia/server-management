@@ -221,7 +221,14 @@ class Command(ServerManagementBaseCommand):
                 if 'requirements' in git_changes:
                     # Rebuild the virtualenv.
                     sudo('rm -rf {}'.format(venv), user=project_folder)
-                    sudo('virtualenv {}'.format(venv), user=project_folder)
+
+                    # Check if we have PyPy
+                    result = run("test -x /usr/bin/pypy")
+
+                    if result.return_code == 0:
+                        sudo('virtualenv -p /usr/bin/pypy {}'.format(venv), user=project_folder)
+                    else:
+                        sudo('virtualenv {}'.format(venv), user=project_folder)
 
                     sudo('chown -R {}:webapps {}'.format(project_folder, venv))
                     sudo('chmod -R g+w /var/www/{}*'.format(project_folder))
