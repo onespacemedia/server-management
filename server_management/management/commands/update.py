@@ -192,55 +192,47 @@ class Command(ServerManagementBaseCommand):
                     local_project_path
                 ), capture=True)
 
-        with settings(warn_only=True):
-            with cd('/var/www/{}'.format(project_folder)):
-                self.server_commit = run("git rev-parse --short HEAD")
+        with cd('/var/www/{}'.format(project_folder)):
+            self.server_commit = run("git rev-parse --short HEAD")
 
-                # Check which venv we need to use.
+            # Check which venv we need to use.
+            with settings(warn_only=True):
                 result = run("bash -c '[ -d venv ]'")
 
-                if result.return_code == 0:
-                    venv = '/var/www/{}/venv/'.format(project_folder)
-                else:
-                    venv = '/var/www/{}/.venv/'.format(project_folder)
+            if result.return_code == 0:
+                venv = '/var/www/{}/venv/'.format(project_folder)
+            else:
+                venv = '/var/www/{}/.venv/'.format(project_folder)
 
-                sudo('chown {}:webapps -R /var/www/*'.format(project_folder))
-                sudo('chmod -R g+w /var/www/{}*'.format(project_folder))
-                sudo('chmod ug+rwX -R /var/www/{}/.git'.format(project_folder))
+            sudo('chown {}:webapps -R /var/www/*'.format(project_folder))
+            sudo('chmod -R g+w /var/www/{}*'.format(project_folder))
+            sudo('chmod ug+rwX -R /var/www/{}/.git'.format(project_folder))
 
-                # Ensure the current user is in the webapps group.
-                sudo('usermod -aG webapps {}'.format(env.user))
+            # Ensure the current user is in the webapps group.
+            sudo('usermod -aG webapps {}'.format(env.user))
 
-                run('git config --global user.email "developers@onespacemedia.com"')
-                run('git config --global user.name "Onespacemedia Developers"')
-                sudo('git stash', user='deploy')
-                git_changes = sudo('git pull', user='deploy')
+            run('git config --global user.email "developers@onespacemedia.com"')
+            run('git config --global user.name "Onespacemedia Developers"')
+            sudo('git stash', user='deploy')
+            git_changes = sudo('git pull', user='deploy')
 
-                sudo('chmod -R g+w /var/www/{}*'.format(project_folder))
+            sudo('chmod -R g+w /var/www/{}*'.format(project_folder))
 
-                if 'requirements' in git_changes:
-                    # Rebuild the virtualenv.
-                    sudo('rm -rf {}'.format(venv), user=project_folder)
+            if 'requirements' in git_changes:
+                # Rebuild the virtualenv.
+                sudo('rm -rf {}'.format(venv), user=project_folder)
 
-                    # Check if we have PyPy
+                # Check if we have PyPy
+                with settings(warn_only=True):
                     result = run("test -x /usr/bin/pypy")
 
-                    if result.return_code == 0:
-                        sudo('virtualenv -p /usr/bin/pypy {}'.format(venv), user=project_folder)
-                    else:
-                        sudo('virtualenv {}'.format(venv), user=project_folder)
+                if result.return_code == 0:
+                    sudo('virtualenv -p /usr/bin/pypy {}'.format(venv), user=project_folder)
+                else:
+                    sudo('virtualenv {}'.format(venv), user=project_folder)
 
-                    sudo('chown -R {}:webapps {}'.format(project_folder, venv))
-                    sudo('chmod -R g+w /var/www/{}*'.format(project_folder))
-
-                    with virtualenv(venv):
-                        with shell_env(DJANGO_SETTINGS_MODULE="{}.settings.{}".format(
-                            project_folder,
-                            remote['server'].get('settings_file', 'production')
-                        )):
-
-                            sudo('pip install -q gunicorn', user=project_folder)
-                            sudo('[[ -e requirements.txt ]] && pip install -qr requirements.txt', user=project_folder)
+                sudo('chown -R {}:webapps {}'.format(project_folder, venv))
+                sudo('chmod -R g+w /var/www/{}*'.format(project_folder))
 
                 with virtualenv(venv):
                     with shell_env(DJANGO_SETTINGS_MODULE="{}.settings.{}".format(
@@ -248,31 +240,40 @@ class Command(ServerManagementBaseCommand):
                         remote['server'].get('settings_file', 'production')
                     )):
 
-                        run('npm install')
-                        run('npm run build')
+                        sudo('pip install -q gunicorn', user=project_folder)
+                        sudo('[[ -e requirements.txt ]] && pip install -qr requirements.txt', user=project_folder)
 
-                        run('./manage.py collectstatic --noinput')
+            with virtualenv(venv):
+                with shell_env(DJANGO_SETTINGS_MODULE="{}.settings.{}".format(
+                    project_folder,
+                    remote['server'].get('settings_file', 'production')
+                )):
 
-                        requirements = run('pip freeze')
-                        compressor = False
-                        watson = False
-                        for line in requirements.split('\n'):
-                            if line.startswith('django-compressor'):
-                                compressor = True
-                            if line.startswith('django-watson'):
-                                watson = True
+                    run('npm install')
+                    run('npm run build')
 
-                        if not compressor:
-                            sudo('./manage.py compileassets', user=project_folder)
+                    run('./manage.py collectstatic --noinput')
 
-                        if 'migrations' in git_changes or 'requirements' in git_changes:
-                            sudo('yes yes | ./manage.py migrate', user=project_folder)
+                    requirements = run('pip freeze')
+                    compressor = False
+                    watson = False
+                    for line in requirements.split('\n'):
+                        if line.startswith('django-compressor'):
+                            compressor = True
+                        if line.startswith('django-watson'):
+                            watson = True
 
-                        if watson:
-                            sudo('./manage.py buildwatson', user=project_folder)
+                    if not compressor:
+                        sudo('./manage.py compileassets', user=project_folder)
 
-                        sudo('supervisorctl restart all')
-                        sudo('chown {}:webapps -R /var/www/*'.format(project_folder))
+                    if 'migrations' in git_changes or 'requirements' in git_changes:
+                        sudo('yes yes | ./manage.py migrate', user=project_folder)
+
+                    if watson:
+                        sudo('./manage.py buildwatson', user=project_folder)
+
+                    sudo('supervisorctl restart all')
+                    sudo('chown {}:webapps -R /var/www/*'.format(project_folder))
 
         # Register the release with Opbeat.
         if 'opbeat' in config and config['opbeat']['app_id'] and config['opbeat']['secret_token']:
