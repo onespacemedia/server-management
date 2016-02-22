@@ -208,6 +208,7 @@ class Command(ServerManagementBaseCommand):
                     'python-pip',
                     'python-passlib',  # Required for generating the htpasswd file
                     'pypy',
+                    'pypy-dev',
                     'supervisor',
                     'libjpeg-dev',
                     'libffi-dev',
@@ -230,7 +231,7 @@ class Command(ServerManagementBaseCommand):
                 'title': "Set the timezone to UTC",
                 'ansible_arguments': {
                     'module_name': 'file',
-                    'module_args': 'path=/usr/share/zoneinfo/UTC dest=/etc/localtime force=yes state=link'
+                    'module_args': 'src=/usr/share/zoneinfo/UTC dest=/etc/localtime force=yes state=link'
                 }
             }
         ]
