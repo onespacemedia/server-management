@@ -266,7 +266,7 @@ class Command(ServerManagementBaseCommand):
                             sudo('./manage.py compileassets', user=project_folder)
 
                         if 'migrations' in git_changes or 'requirements' in git_changes:
-                            sudo('./manage.py migrate', user=project_folder)
+                            sudo('yes yes | ./manage.py migrate', user=project_folder)
 
                         if watson:
                             sudo('./manage.py buildwatson', user=project_folder)
