@@ -249,8 +249,8 @@ class Command(ServerManagementBaseCommand):
                     remote['server'].get('settings_file', 'production')
                 )):
 
-                    run('npm install')
-                    run('npm run build')
+                    sudo('npm install')
+                    sudo('npm run build')
 
                     run('./manage.py collectstatic --noinput')
 
