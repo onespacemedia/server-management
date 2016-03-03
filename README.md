@@ -53,6 +53,7 @@ Next, you need to create a ``server.json`` file which contains the information a
             "server": {
                 "build_system": "npm",
                 "ip": "12.34.45.78"
+                "deploy_user": "deploy",
             },
             "database": {
                 "name": "example_prod",
@@ -60,6 +61,17 @@ Next, you need to create a ``server.json`` file which contains the information a
                 "password": ""
             },
             "is_aws": false,
+        },
+        "slack": {
+            "enabled": true,
+            "endpoints": [
+                {
+                    "url": "https://hooks.slack.com/services/endpoint",
+                    "channel": "#deployments",
+                    "name": "Update Bot",
+                    "emoji": ":computer:"
+                }
+            ]
         }
     }
 
@@ -78,7 +90,7 @@ Please note that the `remote` key changes to `remotes`.
                 "server": {
                     "ip": "ec2-xx-xx-xx-xx.eu-west-1.compute.amazonaws.com",
                     "identity_file": "~/.ssh/server-key.pem",
-                    "initial_user": "ubuntu"
+                    "initial_user": "ubuntu",
                 },
                 "database": {
                     "password": "",
@@ -89,7 +101,8 @@ Please note that the `remote` key changes to `remotes`.
             },
             "production": {
                 "server": {
-                    "ip": "12.34.56.78"
+                    "ip": "12.34.56.78",
+                    "deploy_user": "root",
                 },
                 "database": {
                     "password": "",
