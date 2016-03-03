@@ -61,7 +61,10 @@ class Command(ServerManagementBaseCommand):
                         'fields': [
                             {
                                 'title': 'Project',
-                                'value': django_settings.SITE_NAME,
+                                'value': '{} ({})'.format(
+                                    django_settings.SITE_NAME,
+                                    self.remote,
+                                ),
                                 'short': True,
                             },
                             {
@@ -105,7 +108,10 @@ class Command(ServerManagementBaseCommand):
                         'fields': [
                             {
                                 'title': 'Project',
-                                'value': django_settings.SITE_NAME,
+                                'value': '{} ({})'.format(
+                                    django_settings.SITE_NAME,
+                                    self.remote,
+                                ),
                                 'short': True,
                             },
                             {
@@ -154,7 +160,10 @@ class Command(ServerManagementBaseCommand):
                         'fields': [
                             {
                                 'title': 'Project',
-                                'value': django_settings.SITE_NAME,
+                                'value': '{} ({})'.format(
+                                    django_settings.SITE_NAME,
+                                    self.remote,
+                                ),
                                 'short': True,
                             },
                             {
