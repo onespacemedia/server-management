@@ -181,6 +181,9 @@ class Command(ServerManagementBaseCommand):
         # Load server config from project
         config, remote = load_config(env, options.get('remote', ''))
 
+        # Set remote server name
+        self.remote = config.get('remote_name')
+
         # Load slack config
         self.slack_enabled = config.get('slack', {'enabled': False})['enabled']
         if self.slack_enabled:
@@ -220,8 +223,8 @@ class Command(ServerManagementBaseCommand):
 
             run('git config --global user.email "developers@onespacemedia.com"')
             run('git config --global user.name "Onespacemedia Developers"')
-            sudo('git stash', user='deploy')
-            git_changes = sudo('git pull', user='deploy')
+            sudo('git stash')
+            git_changes = sudo('git pull')
 
             sudo('chmod -R g+w /var/www/{}*'.format(project_folder))
 
