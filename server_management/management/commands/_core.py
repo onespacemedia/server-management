@@ -94,8 +94,11 @@ def load_config(env, remote=None, config_user='deploy'):
             key = prompt('Please enter the path to the AWS key pair: ')
             if key:
                 env.key_filename = key
-    elif sys.argv[1] == 'deploy' and 'initial_user' in remote['server']:
-        env.user = remote['server']['initial_user']
+    else:
+        if sys.argv[1] == 'deploy' and 'initial_user' in remote['server']:
+            env.user = remote['server']['initial_user']
+        elif 'deploy_user' in remote['server']:
+            env.user = remote['server']['deploy_user']
 
     # Make sure we can connect to the server
     with hide('output', 'running', 'warnings'):

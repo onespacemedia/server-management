@@ -249,8 +249,8 @@ class Command(ServerManagementBaseCommand):
                     remote['server'].get('settings_file', 'production')
                 )):
 
-                    run('npm install')
-                    run('npm run build')
+                    sudo('npm install')
+                    sudo('npm run build')
 
                     run('./manage.py collectstatic --noinput')
 
@@ -266,8 +266,7 @@ class Command(ServerManagementBaseCommand):
                     if not compressor:
                         sudo('./manage.py compileassets', user=project_folder)
 
-                    if 'migrations' in git_changes or 'requirements' in git_changes:
-                        sudo('yes yes | ./manage.py migrate', user=project_folder)
+                    sudo('yes yes | ./manage.py migrate', user=project_folder)
 
                     if watson:
                         sudo('./manage.py buildwatson', user=project_folder)
