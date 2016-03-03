@@ -39,6 +39,7 @@ def load_config(env, remote=None, config_user='deploy'):
     if 'remote' in config:
         env.host_string = config['remote']['server']['ip']
         remote = config['remote']
+        config['remote_name'] = 'production'
     elif 'remotes' in config:
         # Prompt for a host selection.
         remote_keys = config['remotes'].keys()
@@ -63,6 +64,7 @@ def load_config(env, remote=None, config_user='deploy'):
 
         env.host_string = config['remotes'][remote_prompt]['server']['ip']
         remote = config['remotes'][remote_prompt]
+        config['remote_name'] = remote_prompt
     else:
         print "No remotes specified in config."
         exit()

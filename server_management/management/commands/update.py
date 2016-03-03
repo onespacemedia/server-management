@@ -13,18 +13,11 @@ import sys
 
 class Command(ServerManagementBaseCommand):
 
-    slack_endpoints = [
-        {
-            'url': "https://hooks.slack.com/services/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",
-            'channel': '#deployments',
-            'name': 'Update Bot',
-            'emoji': ':neckbeard:'
-        }
-    ]
+    slack_enabled = False
+    slack_endpoints = []
 
     current_commit = os.popen("git rev-parse --short HEAD").read().strip()
     remote = os.popen("git config --get remote.origin.url").read().split(':')[1].split('.')[0]
-    slack_enabled = True
     remote = 'production'
 
     def _bitbucket_commit_url(self, commit):
@@ -61,7 +54,10 @@ class Command(ServerManagementBaseCommand):
                         'fields': [
                             {
                                 'title': 'Project',
-                                'value': django_settings.SITE_NAME,
+                                'value': '{} ({})'.format(
+                                    django_settings.SITE_NAME,
+                                    self.remote,
+                                ),
                                 'short': True,
                             },
                             {
@@ -105,7 +101,10 @@ class Command(ServerManagementBaseCommand):
                         'fields': [
                             {
                                 'title': 'Project',
-                                'value': django_settings.SITE_NAME,
+                                'value': '{} ({})'.format(
+                                    django_settings.SITE_NAME,
+                                    self.remote,
+                                ),
                                 'short': True,
                             },
                             {
@@ -154,7 +153,10 @@ class Command(ServerManagementBaseCommand):
                         'fields': [
                             {
                                 'title': 'Project',
-                                'value': django_settings.SITE_NAME,
+                                'value': '{} ({})'.format(
+                                    django_settings.SITE_NAME,
+                                    self.remote,
+                                ),
                                 'short': True,
                             },
                             {
@@ -176,10 +178,18 @@ class Command(ServerManagementBaseCommand):
         sys.__excepthook__(exctype, value, traceback)
 
     def handle(self, *args, **options):
-        self._notify_start()
-
         # Load server config from project
         config, remote = load_config(env, options.get('remote', ''))
+
+        # Set remote server name
+        self.remote = config.get('remote_name')
+
+        # Load slack config
+        self.slack_enabled = config.get('slack', {'enabled': False})['enabled']
+        if self.slack_enabled:
+            self.slack_endpoints = config.get('slack', {'endpoints': []})['endpoints']
+
+        self._notify_start()
 
         # Set local project path
         local_project_path = django_settings.SITE_ROOT
@@ -213,8 +223,8 @@ class Command(ServerManagementBaseCommand):
 
             run('git config --global user.email "developers@onespacemedia.com"')
             run('git config --global user.name "Onespacemedia Developers"')
-            sudo('git stash', user='deploy')
-            git_changes = sudo('git pull', user='deploy')
+            sudo('git stash')
+            git_changes = sudo('git pull')
 
             sudo('chmod -R g+w /var/www/{}*'.format(project_folder))
 
@@ -249,8 +259,9 @@ class Command(ServerManagementBaseCommand):
                     remote['server'].get('settings_file', 'production')
                 )):
 
-                    sudo('npm install')
-                    sudo('npm run build')
+                    if remote['server'].get('build_system', 'npm') == 'npm':
+                        sudo('npm install')
+                        sudo('npm run build')
 
                     run('./manage.py collectstatic --noinput')
 
