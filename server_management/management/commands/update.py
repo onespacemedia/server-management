@@ -223,8 +223,8 @@ class Command(ServerManagementBaseCommand):
 
             run('git config --global user.email "developers@onespacemedia.com"')
             run('git config --global user.name "Onespacemedia Developers"')
-            sudo('git stash')
-            git_changes = sudo('git pull')
+            run('git stash')
+            git_changes = run('git pull')
 
             sudo('chmod -R g+w /var/www/{}*'.format(project_folder))
 
