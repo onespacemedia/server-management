@@ -2,7 +2,7 @@ from django.conf import settings as django_settings
 from fabric.api import *
 from fabvenv import virtualenv
 
-from _core import load_config, ServerManagementBaseCommand
+from ._core import load_config, ServerManagementBaseCommand
 
 import datetime
 import json

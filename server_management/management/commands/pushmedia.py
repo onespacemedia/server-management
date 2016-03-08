@@ -1,7 +1,7 @@
 from django.conf import settings as django_settings
 from django.core.management.base import BaseCommand
 
-from _core import load_config, ServerManagementBaseCommand
+from ._core import load_config, ServerManagementBaseCommand
 
 from fabric.api import *
 import os

@@ -1,4 +1,4 @@
-from _core import load_config, ServerManagementBaseCommand
+from ._core import load_config, ServerManagementBaseCommand
 
 from fabric.api import *
 
