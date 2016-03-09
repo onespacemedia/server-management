@@ -825,6 +825,13 @@ class Command(ServerManagementBaseCommand):
                 }
             },
             {
+                'title': "Stopping memcached and removing from startup runlevels",
+                'ansible_arguments': {
+                    'module_name': 'service',
+                    'module_args': 'name=memcached state=stopped enabled=no'
+                }
+            },
+            {
                 'title': "Create the Supervisor config file for memcached",
                 'ansible_arguments': {
                     'module_name': 'copy',
