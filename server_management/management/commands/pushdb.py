@@ -30,10 +30,19 @@ class Command(ServerManagementBaseCommand):
 
             # Import the database file
             # sudo("su - {name} -c 'psql -q {name} < /tmp/{name}.sql > /dev/null 2>&1'".format(
-            sudo("su - {user} -c 'psql -q {name} < /tmp/{name}.sql'".format(
-                user=remote['database']['user'],
-                name=remote['database']['name']
-            ))
+            with settings(sudo_user='postgres'):
+                sudo('dropdb {name}'.format(
+                    name=remote['database']['name']
+                ))
+
+                sudo('createdb {name} -E UTF-8 --lc-collate=en_GB.UTF-8 --lc-ctype=en_GB.UTF-8 -T template0 -O {user}'.format(
+                    name=remote['database']['name'],
+                    user=remote['database']['user'],
+                ))
+
+                sudo('psql -q {name} < /tmp/{name}.sql'.format(
+                    name=remote['database']['name']
+                ))
 
             # Remove the database file
             run('rm /tmp/{}.sql'.format(
