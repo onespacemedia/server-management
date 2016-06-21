@@ -207,8 +207,6 @@ class Command(ServerManagementBaseCommand):
                     'python-dev',
                     'python-pip',
                     'python-passlib',  # Required for generating the htpasswd file
-                    'pypy',
-                    'pypy-dev',
                     'supervisor',
                     'libjpeg-dev',
                     'libffi-dev',
@@ -224,7 +222,7 @@ class Command(ServerManagementBaseCommand):
                 'title': "Install virtualenv",
                 'ansible_arguments': {
                     'module_name': 'pip',
-                    'module_args': 'name=virtualenv executable=pypy'
+                    'module_args': 'name=virtualenv'
                 }
             },
             {
