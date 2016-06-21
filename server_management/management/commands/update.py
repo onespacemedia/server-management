@@ -228,6 +228,7 @@ class Command(ServerManagementBaseCommand):
 
             sudo('chmod -R g+w /var/www/{}*'.format(project_folder))
 
+            """
             if 'requirements' in git_changes:
                 # Rebuild the virtualenv.
                 sudo('rm -rf {}'.format(venv), user=project_folder)
@@ -243,15 +244,16 @@ class Command(ServerManagementBaseCommand):
 
                 sudo('chown -R {}:webapps {}'.format(project_folder, venv))
                 sudo('chmod -R g+w /var/www/{}*'.format(project_folder))
+            """
 
-                with virtualenv(venv):
-                    with shell_env(DJANGO_SETTINGS_MODULE="{}.settings.{}".format(
-                        project_folder,
-                        remote['server'].get('settings_file', 'production')
-                    )):
+            with virtualenv(venv):
+                with shell_env(DJANGO_SETTINGS_MODULE="{}.settings.{}".format(
+                    project_folder,
+                    remote['server'].get('settings_file', 'production')
+                )):
 
-                        sudo('pip install -q gunicorn', user=project_folder)
-                        sudo('[[ -e requirements.txt ]] && pip install -qr requirements.txt', user=project_folder)
+                    sudo('pip install -q gunicorn', user=project_folder)
+                    sudo('[[ -e requirements.txt ]] && pip install -qr requirements.txt', user=project_folder)
 
             with virtualenv(venv):
                 with shell_env(DJANGO_SETTINGS_MODULE="{}.settings.{}".format(
@@ -263,7 +265,7 @@ class Command(ServerManagementBaseCommand):
                         sudo('npm install')
                         sudo('npm run build')
 
-                    run('./manage.py collectstatic --noinput')
+                    run('python manage.py collectstatic --noinput')
 
                     requirements = run('pip freeze')
                     compressor = False
@@ -275,12 +277,12 @@ class Command(ServerManagementBaseCommand):
                             watson = True
 
                     if not compressor:
-                        sudo('./manage.py compileassets', user=project_folder)
+                        sudo('python manage.py compileassets', user=project_folder)
 
-                    sudo('yes yes | ./manage.py migrate', user=project_folder)
+                    sudo('yes yes | python manage.py migrate', user=project_folder)
 
                     if watson:
-                        sudo('./manage.py buildwatson', user=project_folder)
+                        sudo('python manage.py buildwatson', user=project_folder)
 
                     sudo('supervisorctl restart all')
                     sudo('chown {}:webapps -R /var/www/*'.format(project_folder))
