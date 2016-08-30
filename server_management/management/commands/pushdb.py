@@ -84,7 +84,7 @@ class Command(ServerManagementBaseCommand):
                     'title': "Start Supervisor tasks",
                     'ansible_arguments': {
                         'module_name': 'command',
-                        'module_args': 'supervisorctl stop all'
+                        'module_args': 'supervisorctl start all'
                     }
                 }
             ]
