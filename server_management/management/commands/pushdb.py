@@ -31,6 +31,13 @@ class Command(ServerManagementBaseCommand):
             # Define db tasks
             db_tasks = [
                 {
+                    'title': "Stop Supervisor tasks",
+                    'ansible_arguments': {
+                        'module_name': 'command',
+                        'module_args': 'supervisorctl stop all'
+                    }
+                },
+                {
                     'title': "Drop database",
                     'ansible_arguments': {
                         'module_name': 'postgresql_db',
@@ -71,6 +78,13 @@ class Command(ServerManagementBaseCommand):
                             remote['database']['name']
                         ),
                         'sudo_user': 'postgres'
+                    }
+                },
+                {
+                    'title': "Start Supervisor tasks",
+                    'ansible_arguments': {
+                        'module_name': 'command',
+                        'module_args': 'supervisorctl stop all'
                     }
                 }
             ]
