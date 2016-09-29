@@ -207,8 +207,6 @@ class Command(ServerManagementBaseCommand):
                     'python-dev',
                     'python-pip',
                     'python-passlib',  # Required for generating the htpasswd file
-                    'pypy',
-                    'pypy-dev',
                     'supervisor',
                     'libjpeg-dev',
                     'libffi-dev',
@@ -224,7 +222,7 @@ class Command(ServerManagementBaseCommand):
                 'title': "Install virtualenv",
                 'ansible_arguments': {
                     'module_name': 'pip',
-                    'module_args': 'name=virtualenv executable=pypy'
+                    'module_args': 'name=virtualenv'
                 }
             },
             {
@@ -822,6 +820,13 @@ class Command(ServerManagementBaseCommand):
                         session_files['supervisor_config'].name,
                         project_folder
                     )
+                }
+            },
+            {
+                'title': "Stopping memcached and removing from startup runlevels",
+                'ansible_arguments': {
+                    'module_name': 'service',
+                    'module_args': 'name=memcached state=stopped enabled=no'
                 }
             },
             {
