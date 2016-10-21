@@ -129,12 +129,12 @@ def ansible_task(env, **kwargs):
     ansible_inventory = ansible.inventory.Inventory([env.host_string])
 
     ansible_args = dict({
-                            'pattern': 'all',
-                            'inventory': ansible_inventory,
-                            'sudo': True,
-                            'sudo_user': 'root',
-                            'remote_user': env.user
-                        }.items() + kwargs.items())
+        'pattern': 'all',
+        'inventory': ansible_inventory,
+        'sudo': True,
+        'sudo_user': 'root',
+        'remote_user': env.user
+    }.items() + kwargs.items())
 
     if getattr(env, 'key_filename'):
         ansible_args['private_key_file'] = env.key_filename

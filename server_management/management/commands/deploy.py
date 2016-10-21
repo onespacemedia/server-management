@@ -149,75 +149,97 @@ class Command(ServerManagementBaseCommand):
         if 'optional_packages' in config:
             optional_packages = config['optional_packages']
 
-        # Define base tasks
-        base_tasks = [
-            {
-                'title': "Update apt cache and upgrade everything",
-                'ansible_arguments': {
-                    'module_name': 'apt',
-                    'module_args': 'update_cache=yes upgrade=yes'
-                }
-            },
-            {
-                'title': "Add nodesource key",
-                'ansible_arguments': {
-                    'module_name': 'apt_key',
-                    'module_args': 'url=https://deb.nodesource.com/gpgkey/nodesource.gpg.key'
-                }
-            },
-            {
-                'title': "Add nodesource repo",
-                'ansible_arguments': {
-                    'module_name': 'apt_repository',
-                    'module_args': 'repo="deb https://deb.nodesource.com/node_5.x trusty main" update_cache=yes'
-                }
-            },
-            {
-                'title': 'Install unattended-upgrades',
-                'ansible_arguments': {
-                    'module_name': 'apt',
-                    'module_args': 'pkg=unattended-upgrades state=present'
-                }
-            },
-            {
-                'title': 'Adjust APT update intervals',
-                'ansible_arguments': {
-                    'module_name': 'copy',
-                    'module_args': 'src={} dest=/etc/apt/apt.conf.d/10periodic'.format(
-                        session_files['apt_periodic'].name,
-                    )
-                }
-            },
-            {
-                'title': 'Make sure unattended-upgrades only installs from $ubuntu_release-security',
-                'ansible_arguments': {
-                    'module_name': 'lineinfile',
-                    'module_args': 'dest=/etc/apt/apt.conf.d/50unattended-upgrades regexp="$ubuntu_release-updates" state=absent'
-                }
-            },
-            {
-                'title': "Install the following base packages",
-                'ansible_arguments': {
-                    'module_name': 'apt',
-                    'module_args': 'name={item} force=yes state=present'
+        remote_os = remote['server'].get('os', 'ubuntu')
+
+        base_tasks_os = {
+            'ubuntu': [
+                {
+                    'title': "Update apt cache and upgrade everything",
+                    'ansible_arguments': {
+                        'module_name': 'apt',
+                        'module_args': "update_cache=yes upgrade=yes"
+                    }
                 },
-                'with_items': [
-                    'build-essential',
-                    'git',
-                    'python-dev',
-                    'python-pip',
-                    'python-passlib',  # Required for generating the htpasswd file
-                    'supervisor',
-                    'libjpeg-dev',
-                    'libffi-dev',
-                    'nodejs',
-                    'memcached',
-                ] + (
-                    ['libgeoip-dev'] if optional_packages.get('geoip', True) else []
-                ) + (
-                    ['libmysqlclient-dev'] if optional_packages.get('mysql', True) else []
-                )
-            },
+                {
+                    'title': 'Install unattended-upgrades',
+                    'ansible_arguments': {
+                        'module_name': 'apt',
+                        'module_args': 'pkg=unattended-upgrades state=present'
+                    }
+                },
+                {
+                    'title': 'Adjust APT update intervals',
+                    'ansible_arguments': {
+                        'module_name': 'copy',
+                        'module_args': 'src={} dest=/etc/apt/apt.conf.d/10periodic'.format(
+                            session_files['apt_periodic'].name,
+                        )
+                    }
+                },
+                {
+                    'title': 'Make sure unattended-upgrades only installs from $ubuntu_release-security',
+                    'ansible_arguments': {
+                        'module_name': 'lineinfile',
+                        'module_args': 'dest=/etc/apt/apt.conf.d/50unattended-upgrades regexp="$ubuntu_release-updates" state=absent'
+                    }
+                },
+                {
+                    'title': "Install the following base packages",
+                    'ansible_arguments': {
+                        'module_name': 'apt',
+                        'module_args': 'name={item} force=yes state=present'
+                    },
+                    'with_items': [
+                        'build-essential',
+                        'git',
+                        'python-dev',
+                        'python-pip',
+                        'python-passlib',  # Required for generating the htpasswd file
+                        'supervisor',
+                        'libjpeg-dev',
+                        'libffi-dev',
+                        'nodejs',
+                        'memcached',
+                    ] + (
+                        ['libgeoip-dev'] if optional_packages.get('geoip', True) else []
+                    ) + (
+                        ['libmysqlclient-dev'] if optional_packages.get('mysql', True) else []
+                    )
+                },
+            ],
+            'centos': [
+                {
+                    'title': "Install the following base packages",
+                    'ansible_arguments': {
+                        'module_name': 'yum',
+                        'module_args': 'name={item} state=present'
+                    },
+                    'with_items': [
+                        'gcc',
+                        'gcc-c++',
+                        'make',
+                        'openssl-devel',
+                        'git',
+                        'python-devel',
+                        'epel-release',
+                        'python-pip',
+                        'python-passlib',  # Required for generating the htpasswd file
+                        'supervisor',
+                        'libjpeg-devel',
+                        'libffi-devel',
+                        'nodejs',
+                        'memcached',
+                    ] + (
+                        ['libgeoip-dev'] if optional_packages.get('geoip', True) else []
+                    ) + (
+                        ['libmysqlclient-dev'] if optional_packages.get('mysql', True) else []
+                    )
+                },
+            ]
+        }
+
+        # Define base tasks
+        base_tasks = base_tasks_os.get(remote_os, []) + [
             {
                 'title': "Install virtualenv",
                 'ansible_arguments': {
@@ -260,7 +282,8 @@ class Command(ServerManagementBaseCommand):
             }
         ]
 
-        run_tasks(env, firewall_tasks)
+        if remote_os in ['ubuntu']:
+            run_tasks(env, firewall_tasks)
 
         # Configure swap
         swap_tasks = [
@@ -304,18 +327,35 @@ class Command(ServerManagementBaseCommand):
 
         run_tasks(env, swap_tasks)
 
-        # Define SSH tasks
-        ssh_tasks = [
-            {
-                'title': 'Install fail2ban',
-                'ansible_arguments': {
-                    'module_name': 'apt',
-                    'module_args': 'name={item} state=present'
+        ssh_tasks_os = {
+            'ubuntu': [
+                {
+                    'title': 'Install fail2ban',
+                    'ansible_arguments': {
+                        'module_name': 'apt',
+                        'module_args': 'name={item} state=present'
+                    },
+                    'with_items': [
+                        'fail2ban'
+                    ]
                 },
-                'with_items': [
-                    'fail2ban'
-                ]
-            },
+            ],
+            'centos': [
+                {
+                    'title': 'Install fail2ban',
+                    'ansible_arguments': {
+                        'module_name': 'yum',
+                        'module_args': 'name={item} state=present'
+                    },
+                    'with_items': [
+                        'fail2ban'
+                    ]
+                },
+            ]
+        }
+
+        # Define SSH tasks
+        ssh_tasks = ssh_tasks_os.get(remote_os, []) + [
             {
                 'title': "Create the application group",
                 'ansible_arguments': {
@@ -372,79 +412,117 @@ class Command(ServerManagementBaseCommand):
                     'module_name': 'lineinfile',
                     'module_args': 'dest=/etc/ssh/sshd_config regexp="^PasswordAuthentication" line="PasswordAuthentication no" state=present'
                 }
-            },
-            {
-                'title': 'Restart SSH',
-                'ansible_arguments': {
-                    'module_name': 'service',
-                    'module_args': 'name=ssh state=restarted'
-                }
             }
         ]
+
+        ssh_tasks_append = {
+            'ubuntu': [
+                {
+                    'title': 'Restart SSH',
+                    'ansible_arguments': {
+                        'module_name': 'service',
+                        'module_args': 'name=ssh state=restarted'
+                    }
+                }
+            ],
+            'centos': [
+                {
+                    'title': 'Restart SSH',
+                    'ansible_arguments': {
+                        'module_name': 'service',
+                        'module_args': 'name=sshd state=restarted'
+                    }
+                }
+            ],
+        }
+
+        ssh_tasks = ssh_tasks + ssh_tasks_append.get(remote_os, [])
+
         run_tasks(env, ssh_tasks)
 
         # Define db tasks
-        db_tasks = [
-            {
-                'title': "Install PostgreSQL",
-                'ansible_arguments': {
-                    'module_name': 'apt',
-                    'module_args': 'name={item} force=yes state=present'
-                },
-                'with_items': [
-                    'postgresql-9.3',
-                    'postgresql-contrib-9.3',
-                    'libpq-dev',
-                    'python-psycopg2',
-                    'pgtune'
-                ]
-            },
-            {
-                'title': "Ensure the PostgreSQL service is running",
-                'ansible_arguments': {
-                    'module_name': 'service',
-                    'module_args': 'name=postgresql state=started enabled=yes'
+        db_tasks_os = {
+            'ubuntu': [
+                {
+                    'title': "Install PostgreSQL",
+                    'ansible_arguments': {
+                        'module_name': 'apt',
+                        'module_args': 'name={item} force=yes state=present'
+                    },
+                    'with_items': [
+                        'postgresql-9.3',
+                        'postgresql-contrib-9.3',
+                        'libpq-dev',
+                        'python-psycopg2',
+                        'pgtune'
+                    ]
                 }
-            },
-            {
-                'title': "Backuping PostgreSQL main config file",
-                'ansible_arguments': {
-                    'module_name': 'command',
-                    'module_args': 'mv /etc/postgresql/9.3/main/postgresql.conf '
-                                   '/etc/postgresql/9.3/main/postgresql.conf.old '
-                                   'creates=/etc/postgresql/9.3/main/postgresql.conf.old'
+            ],
+            'centos': [
+                {
+                    'title': "Install PostgreSQL",
+                    'ansible_arguments': {
+                        'module_name': 'yum',
+                        'module_args': 'name={item} state=present'
+                    },
+                    'with_items': [
+                        'postgresql-server',
+                        'postgresql-contrib',
+                        'postgresql-libs',
+                        'python-psycopg2',
+                        # 'pgtune'
+                    ]
                 }
-            },
-            {
-                'title': "Optimising PostgreSQL via pgtune",
-                'ansible_arguments': {
-                    'module_name': 'command',
-                    'module_args': 'pgtune -i /etc/postgresql/9.3/main/postgresql.conf.old -o '
-                                   '/etc/postgresql/9.3/main/postgresql.conf --type=Web',
-                    'sudo_user': 'postgres'
-                }
-            },
-            {
-                'title': "Ensure we have the database locale",
-                'ansible_arguments': {
-                    'module_name': 'locale_gen',
-                    'module_args': 'name=en_GB.UTF-8 state=present'
-                }
-            },
-            {
-                'title': 'Reconfigure locales',
-                'ansible_arguments': {
-                    'module_name': 'command',
-                    'module_args': 'dpkg-reconfigure locales'
-                }
-            },
-            {
-                'title': "Restart PostgreSQL",
-                'ansible_arguments': {
-                    'module_name': 'service',
-                    'module_args': 'name=postgresql state=restarted enabled=yes'
-                }
-            },
+            ]
+        }
+
+        db_tasks = db_tasks_os.get(remote_os, []) + [
+            # {
+            #     'title': "Ensure the PostgreSQL service is running",
+            #     'ansible_arguments': {
+            #         'module_name': 'service',
+            #         'module_args': 'name=postgresql state=started enabled=yes'
+            #     }
+            # },
+            # {
+            #     'title': "Backuping PostgreSQL main config file",
+            #     'ansible_arguments': {
+            #         'module_name': 'command',
+            #         'module_args': 'mv /etc/postgresql/9.3/main/postgresql.conf '
+            #                        '/etc/postgresql/9.3/main/postgresql.conf.old '
+            #                        'creates=/etc/postgresql/9.3/main/postgresql.conf.old'
+            #     }
+            # },
+            # {
+            #     'title': "Optimising PostgreSQL via pgtune",
+            #     'ansible_arguments': {
+            #         'module_name': 'command',
+            #         'module_args': 'pgtune -i /etc/postgresql/9.3/main/postgresql.conf.old -o '
+            #                        '/etc/postgresql/9.3/main/postgresql.conf --type=Web',
+            #         'sudo_user': 'postgres'
+            #     }
+            # },
+            # {
+            #     'title': "Ensure we have the database locale",
+            #     'ansible_arguments': {
+            #         'module_name': 'locale_gen',
+            #         'module_args': 'name=en_GB.UTF-8 state=present'
+            #     }
+            # },
+            # {
+            #     'title': 'Reconfigure locales',
+            #     'ansible_arguments': {
+            #         'module_name': 'command',
+            #         'module_args': 'dpkg-reconfigure locales'
+            #     }
+            # },
+            # {
+            #     'title': "Restart PostgreSQL",
+            #     'ansible_arguments': {
+            #         'module_name': 'service',
+            #         'module_args': 'name=postgresql state=restarted enabled=yes'
+            #     }
+            # },
             {
                 'title': "Ensure database is created",
                 'ansible_arguments': {
@@ -478,13 +556,13 @@ class Command(ServerManagementBaseCommand):
                     'sudo_user': 'postgres'
                 }
             },
-            {
-                'title': 'Pre-empt PostgreSQL breaking..',
-                'ansible_arguments': {
-                    'module_name': 'lineinfile',
-                    'module_args': 'dest=/etc/postgresql/9.3/main/pg_ctl.conf regexp="^pg_ctl_options" line="pg_ctl_options = \'-l /tmp/pg.log\'" state=present'
-                }
-            },
+            # {
+            #     'title': 'Pre-empt PostgreSQL breaking..',
+            #     'ansible_arguments': {
+            #         'module_name': 'lineinfile',
+            #         'module_args': 'dest=/etc/postgresql/9.3/main/pg_ctl.conf regexp="^pg_ctl_options" line="pg_ctl_options = \'-l /tmp/pg.log\'" state=present'
+            #     }
+            # },
         ]
         run_tasks(env, db_tasks)
 
