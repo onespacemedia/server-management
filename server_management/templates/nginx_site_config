@@ -9,6 +9,10 @@ upstream wsgi_server {
 server {
     listen              80;
     server_name         {{ domain_names }};
+    
+    satisfy any;
+    allow 80.6.99.23;
+    deny all;
 
     auth_basic "Restricted";
     auth_basic_user_file /etc/nginx/htpasswd;
