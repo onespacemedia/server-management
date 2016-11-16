@@ -159,20 +159,6 @@ class Command(ServerManagementBaseCommand):
                 }
             },
             {
-                'title': "Add nodesource key",
-                'ansible_arguments': {
-                    'module_name': 'apt_key',
-                    'module_args': 'url=https://deb.nodesource.com/gpgkey/nodesource.gpg.key'
-                }
-            },
-            {
-                'title': "Add nodesource repo",
-                'ansible_arguments': {
-                    'module_name': 'apt_repository',
-                    'module_args': 'repo="deb https://deb.nodesource.com/node_5.x trusty main" update_cache=yes'
-                }
-            },
-            {
                 'title': 'Install unattended-upgrades',
                 'ansible_arguments': {
                     'module_name': 'apt',
@@ -210,6 +196,7 @@ class Command(ServerManagementBaseCommand):
                     'supervisor',
                     'libjpeg-dev',
                     'libffi-dev',
+                    'libssl-dev',  # Required for nvm.
                     'nodejs',
                     'memcached',
                 ] + (
@@ -593,7 +580,7 @@ class Command(ServerManagementBaseCommand):
                 'title': "Setup the Git repo",
                 'ansible_arguments': {
                     'module_name': 'git',
-                    'module_args': 'repo={} dest={} accept_hostkey=yes ssh_opts="-o StrictHostKeyChecking=no"'.format(
+                    'module_args': 'repo={} dest={} version=develop accept_hostkey=yes ssh_opts="-o StrictHostKeyChecking=no"'.format(
                         git_url,
                         "/var/www/{}".format(
                             project_folder
@@ -860,18 +847,38 @@ class Command(ServerManagementBaseCommand):
             "none": [],
             "npm": [
                 {
-                    'title': 'Symlink Node.js',
+                    'title': 'Install nvm',
                     'ansible_arguments': {
-                        'module_name': 'file',
-                        'module_args': 'src=/usr/bin/nodejs dest=/usr/bin/node state=link'
+                        'module_name': 'shell',
+                        'module_args': 'sudo -H -u {project} bash -c "curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.32.1/install.sh | bash" executable=/bin/bash'.format(
+                            project=project_folder,
+                        )
                     }
                 },
                 {
-                    'title': 'Install npm packages',
+                    'title': 'Activate nvm then install node and yarn',
                     'ansible_arguments': {
-                        'module_name': 'npm',
-                        'module_args': 'path=/var/www/{project}'.format(
-                            project=project_folder
+                        'module_name': 'shell',
+                        'module_args': 'sudo -H -u {project} bash -c ". ~/.nvm/nvm.sh && nvm install && npm install -g yarn" chdir=/var/www/{project} executable=/bin/bash'.format(
+                            project=project_folder,
+                        )
+                    }
+                },
+                {
+                    'title': 'Fix some permissions',
+                    'ansible_arguments': {
+                        'module_name': 'shell',
+                        'module_args': 'chown {project}:webapps -R /var/www/*; chmod -R g+w /var/www/{project}*; chmod ug+rwX -R /var/www/{project}/.git executable=/bin/bash'.format(
+                            project=project_folder,
+                        )
+                    }
+                },
+                {
+                    'title': 'Install node packages',
+                    'ansible_arguments': {
+                        'module_name': 'shell',
+                        'module_args': 'sudo -H -u {project} bash -c ". ~/.nvm/nvm.sh && yarn" chdir=/var/www/{project} executable=/bin/bash'.format(
+                            project=project_folder,
                         )
                     }
                 },
@@ -879,7 +886,7 @@ class Command(ServerManagementBaseCommand):
                     'title': 'Initiate build',
                     'ansible_arguments': {
                         'module_name': 'shell',
-                        'module_args': 'npm run build chdir=/var/www/{project}'.format(
+                        'module_args': 'sudo -H -u {project} bash -c ". ~/.nvm/nvm.sh && cd /var/www/{project} && yarn run build" executable=/bin/bash'.format(
                             project=project_folder,
                         )
                     }
@@ -898,6 +905,7 @@ class Command(ServerManagementBaseCommand):
             ]
 
         }
+
         run_tasks(env, build_systems[remote['server'].get('build_system', 'none')])
 
         # Delete files
