@@ -260,8 +260,8 @@ class Command(ServerManagementBaseCommand):
                 )):
 
                     if remote['server'].get('build_system', 'npm') == 'npm':
-                        sudo('npm install')
-                        sudo('npm run build')
+                        sudo('. ~/.nvm/nvm.sh && yarn', user=project_folder, shell='/bin/bash')
+                        sudo('. ~/.nvm/nvm.sh && yarn run build', user=project_folder, shell='/bin/bash')
 
                     run('./manage.py collectstatic --noinput')
 
