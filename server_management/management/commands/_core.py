@@ -10,15 +10,26 @@ import ansible.inventory
 import sys
 
 
-class ServerManagementBaseCommand(BaseCommand):
-    option_list = BaseCommand.option_list + (
-        make_option(
+def _add_options(target):
+    return (
+        target(
             '--remote',
             dest='remote',
             default=None,
             help='remote host'
-        ),
+        )
     )
+
+
+class ServerManagementBaseCommand(BaseCommand):
+
+    if hasattr(BaseCommand, 'option_list'):
+        # Django < 1.10
+        option_list = BaseCommand.option_list + _add_options(make_option)
+    else:
+        # Django >= 1.10
+        def add_arguments(self, parser):
+            _add_options(parser.add_argument)
 
 
 def load_config(env, remote=None, config_user='deploy'):
