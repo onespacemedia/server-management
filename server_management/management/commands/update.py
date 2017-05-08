@@ -250,7 +250,6 @@ class Command(ServerManagementBaseCommand):
                         remote['server'].get('settings_file', 'production')
                     )):
 
-                        sudo('pip install -q gunicorn', user=project_folder)
                         sudo('[[ -e requirements.txt ]] && pip install -qr requirements.txt', user=project_folder)
 
             with virtualenv(venv):
@@ -258,7 +257,8 @@ class Command(ServerManagementBaseCommand):
                     project_folder,
                     remote['server'].get('settings_file', 'production')
                 )):
-
+                    sudo('pip install -q gunicorn', user=project_folder)
+                    
                     if remote['server'].get('build_system', 'npm') == 'npm':
                         sudo('. ~/.nvm/nvm.sh && yarn', user=project_folder, shell='/bin/bash')
                         sudo('. ~/.nvm/nvm.sh && yarn run build', user=project_folder, shell='/bin/bash')
