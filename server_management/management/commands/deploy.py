@@ -6,10 +6,11 @@ from urllib import urlencode
 from django.conf import settings as django_settings
 from django.core.files.temp import NamedTemporaryFile
 from django.template.loader import render_to_string
-from fabric.api import *
+from fabric.api import abort, env, hide, local, lcd, prompt, settings
+from fabric.contrib.console import confirm
 import requests
 
-from _core import load_config, ansible_task, run_tasks, check_request, ServerManagementBaseCommand
+from ._core import load_config, ansible_task, run_tasks, check_request, ServerManagementBaseCommand
 
 
 class Command(ServerManagementBaseCommand):
@@ -21,6 +22,14 @@ class Command(ServerManagementBaseCommand):
         # Set local project path
         local_project_path = django_settings.SITE_ROOT
 
+        if django_settings.DEBUG:
+            abort(
+                "You're currently using your local settings file, you need use production instead.\n"
+                "To use production settings pass `--settings={}` to the deploy command.".format(
+                    os.getenv('DJANGO_SETTINGS_MODULE').replace('.local', '.production')
+                )
+            )
+
         # Change into the local project folder
         with hide('output', 'running', 'warnings'):
             with lcd(local_project_path):
@@ -29,15 +38,18 @@ class Command(ServerManagementBaseCommand):
                 remotes = local('git remote', capture=True).split('\n')
 
                 if len(remotes) == 1:
-                    git_remote = local('git config --get remote.{}.url'.format(remotes[0]), capture=True)
+                    git_remote = local(
+                        'git config --get remote.{}.url'.format(remotes[0]), capture=True)
                 else:
                     def validate_choice(choice):
                         if choice in remotes:
                             return choice
                         raise Exception("That is not a valid choice.")
 
-                    choice = prompt("Which Git remote would you like to use?", validate=validate_choice)
-                    git_remote = local('git config --get remote.{}.url'.format(choice), capture=True)
+                    choice = prompt(
+                        "Which Git remote would you like to use?", validate=validate_choice)
+                    git_remote = local(
+                        'git config --get remote.{}.url'.format(choice), capture=True)
 
                 # Is this a bitbucket repo?
                 is_bitbucket_repo = 'git@bitbucket.org' in git_remote
@@ -78,6 +90,25 @@ class Command(ServerManagementBaseCommand):
 
         # Use the site domain as a fallback domain
         fallback_domain_name = raw_input("What should the default domain be? ({}) ".format(django_settings.SITE_DOMAIN)) or django_settings.SITE_DOMAIN
+
+        domain_names = prompt('Which domains would you like to enable in nginx?', default=domain_names)
+
+        # If the domain is pointing to the droplet already, we can setup SSL.
+        setup_ssl_for = [
+            domain_name
+            for domain_name in domain_names.split(' ')
+            if local('dig +short {}'.format(domain_name), capture=True) == remote['server']['ip']
+            # if confirm('Would you like to configure SSL for {}?'.format(domain_name))
+        ]
+
+        if not setup_ssl_for:
+            abort("Sorry, it's $CURRENT_YEAR, you need to use SSL. Please update the domain DNS to point to {}.".format(
+                remote['server']['ip']
+            ))
+
+        for domain_name in domain_names.split(' '):
+            if domain_name not in setup_ssl_for:
+                print 'SSL will not be configured for {}'.format(domain_name)
 
         # Override username (for DO hosts).
         if env.user == 'deploy':
@@ -151,6 +182,23 @@ class Command(ServerManagementBaseCommand):
 
         # Define base tasks
         base_tasks = [
+            # Add nginx and Let's Encrypt PPAs.  We add them up here because an
+            # `apt-get update` is require for them to be truly added, and that
+            # comes next already.
+            {
+                'title': 'Add nginx PPA',
+                'ansible_arguments': {
+                    'module_name': 'apt_repository',
+                    'module_args': 'repo=ppa:nginx/stable state=present'
+                }
+            },
+            {
+                'title': "Add Let's Encrypt PPA",
+                'ansible_arguments': {
+                    'module_name': 'apt_repository',
+                    'module_args': 'repo=ppa:certbot/certbot state=present'
+                }
+            },
             {
                 'title': "Update apt cache and upgrade everything",
                 'ansible_arguments': {
@@ -236,6 +284,13 @@ class Command(ServerManagementBaseCommand):
                 'ansible_arguments': {
                     'module_name': 'ufw',
                     'module_args': 'rule=allow port=80 proto=tcp'
+                }
+            },
+            {
+                'title': 'Allow HTTPS connections through the firewall',
+                'ansible_arguments': {
+                    'module_name': 'ufw',
+                    'module_args': 'rule=allow port=443 proto=tcp'
                 }
             },
             {
@@ -438,7 +493,7 @@ class Command(ServerManagementBaseCommand):
                     'module_name': 'postgresql_db',
                     'module_args': "name='{}' encoding='UTF-8' lc_collate='en_GB.UTF-8' lc_ctype='en_GB.UTF-8' "
                                    "template='template0' state=present".format(
-                                       remote['database']['name']
+                                       remote['database']['name'],
                                    ),
                     'sudo_user': 'postgres'
                 }
@@ -450,7 +505,7 @@ class Command(ServerManagementBaseCommand):
                     'module_args': "db='{}' name='{}' password='{}' priv=ALL state=present".format(
                         remote['database']['name'],
                         remote['database']['user'],
-                        remote['database']['password']
+                        remote['database']['password'],
                     ),
                     'sudo_user': 'postgres'
                 }
@@ -460,7 +515,7 @@ class Command(ServerManagementBaseCommand):
                 'ansible_arguments': {
                     'module_name': 'postgresql_user',
                     'module_args': 'name={} role_attr_flags=NOSUPERUSER,NOCREATEDB state=present'.format(
-                        remote['database']['name']
+                        remote['database']['name'],
                     ),
                     'sudo_user': 'postgres'
                 }
@@ -482,7 +537,7 @@ class Command(ServerManagementBaseCommand):
                 'ansible_arguments': {
                     'module_name': 'user',
                     'module_args': 'name={} group=webapps state=present'.format(
-                        project_folder
+                        project_folder,
                     )
                 }
             },
@@ -504,7 +559,7 @@ class Command(ServerManagementBaseCommand):
         ssh_key_request = ansible_task(
             env,
             module_name='shell',
-            module_args='cat /home/deploy/.ssh/id_rsa.pub'
+            module_args='cat /home/deploy/.ssh/id_rsa.pub',
         )
         check_request(ssh_key_request, env, "TASK")
         ssh_key = ssh_key_request['contacted'][env.host_string]['stdout']
@@ -516,7 +571,7 @@ class Command(ServerManagementBaseCommand):
             try:
                 repo_ssh_keys = requests.get('https://bitbucket.org/api/1.0/repositories/{}/{}/deploy-keys/'.format(
                     bitbucket_account,
-                    bitbucket_repo
+                    bitbucket_repo,
                 ), auth=(bitbucket_username, bitbucket_password))
             except:
                 print "[\033[95mTASK\033[0m] [\033[91mFAILED\033[0m]"
@@ -532,11 +587,11 @@ class Command(ServerManagementBaseCommand):
                     requests.post(
                         'https://bitbucket.org/api/1.0/repositories/{}/{}/deploy-keys/'.format(
                             bitbucket_account,
-                            bitbucket_repo
+                            bitbucket_repo,
                         ),
                         data=urlencode({
                             'label': 'Application Server ({})'.format(env.host_string),
-                            'key': ssh_key
+                            'key': ssh_key,
                         }),
                         auth=(bitbucket_username, bitbucket_password)
                     )
@@ -552,13 +607,15 @@ class Command(ServerManagementBaseCommand):
             print "[\033[95mTASK\033[0m] Adding the SSH key to Github..."
 
             try:
-                requests.post('https://api.github.com/repos/{}/{}/keys'.format(github_account, github_repo), json={
+                response = requests.post('https://api.github.com/repos/{}/{}/keys'.format(github_account, github_repo), json={
                     'title': 'Application Server ({})'.format(env.host_string),
                     'key': ssh_key,
-                    'read_only': True
+                    'read_only': True,
                 }, headers={
                     'Authorization': 'token {}'.format(github_token)
                 })
+
+                print response.text
             except Exception as e:
                 print e.errors
                 print "[\033[95mTASK\033[0m] [\033[91mFAILED\033[0m]"
@@ -567,12 +624,12 @@ class Command(ServerManagementBaseCommand):
         if is_bitbucket_repo:
             git_url = "git@bitbucket.org:{}/{}.git".format(
                 bitbucket_account,
-                bitbucket_repo
+                bitbucket_repo,
             )
         elif is_github_repo:
             git_url = 'git@github.com:{}/{}.git'.format(
                 github_account,
-                github_repo
+                github_repo,
             )
 
         git_tasks = [
@@ -583,7 +640,7 @@ class Command(ServerManagementBaseCommand):
                     'module_args': 'repo={} dest={} version=develop accept_hostkey=yes ssh_opts="-o StrictHostKeyChecking=no"'.format(
                         git_url,
                         "/var/www/{}".format(
-                            project_folder
+                            project_folder,
                         )
                     ),
                     'sudo_user': 'deploy'
@@ -602,7 +659,7 @@ class Command(ServerManagementBaseCommand):
                         "/var/www/{}_static/".format(
                             project_folder
                         ),
-                        project_folder
+                        project_folder,
                     )
                 }
             },
@@ -614,7 +671,7 @@ class Command(ServerManagementBaseCommand):
                         "/var/www/{}_media/".format(
                             project_folder
                         ),
-                        project_folder
+                        project_folder,
                     )
                 }
             },
@@ -628,7 +685,7 @@ class Command(ServerManagementBaseCommand):
                 'ansible_arguments': {
                     'module_name': 'command',
                     'module_args': 'virtualenv /var/www/{project}/.venv --no-site-packages creates=/var/www/{project}/.venv'.format(
-                        project=project_folder
+                        project=project_folder,
                     )
                 }
             },
@@ -638,7 +695,7 @@ class Command(ServerManagementBaseCommand):
                     'module_name': 'copy',
                     'module_args': 'src={file} dest=/var/www/{project}/gunicorn_start owner={project} group=webapps mode=0755 backup=yes'.format(
                         file=session_files['gunicorn_start'].name,
-                        project=project_folder
+                        project=project_folder,
                     )
                 }
             },
@@ -647,7 +704,7 @@ class Command(ServerManagementBaseCommand):
                 'ansible_arguments': {
                     'module_name': 'file',
                     'module_args': 'path=/var/log owner={} group=webapps mode=0774 state=directory'.format(
-                        project_folder
+                        project_folder,
                     )
                 }
             },
@@ -663,7 +720,7 @@ class Command(ServerManagementBaseCommand):
                 'ansible_arguments': {
                     'module_name': 'file',
                     'module_args': 'path=/var/log/gunicorn_supervisor.log owner={} group=webapps mode=0664 state=file'.format(
-                        project_folder
+                        project_folder,
                     )
                 }
             },
@@ -676,7 +733,7 @@ class Command(ServerManagementBaseCommand):
             env,
             module_name='stat',
             module_args='path=/var/www/{}/requirements.txt'.format(
-                project_folder
+                project_folder,
             )
         )
         check_request(requirements_check, env, "TASK")
@@ -694,7 +751,7 @@ class Command(ServerManagementBaseCommand):
                     'ansible_arguments': {
                         'module_name': 'pip',
                         'module_args': 'virtualenv=/var/www/{project}/.venv requirements=/var/www/{project}/requirements.txt'.format(
-                            project=project_folder
+                            project=project_folder,
                         )
                     }
                 }
@@ -707,7 +764,7 @@ class Command(ServerManagementBaseCommand):
                 'ansible_arguments': {
                     'module_name': 'pip',
                     'module_args': 'virtualenv=/var/www/{project}/.venv name=gunicorn'.format(
-                        project=project_folder
+                        project=project_folder,
                     )
                 }
             },
@@ -716,7 +773,7 @@ class Command(ServerManagementBaseCommand):
                 'ansible_arguments': {
                     'module_name': 'file',
                     'module_args': 'path=/var/www/{project}_media/ owner={project} group=webapps recurse=yes'.format(
-                        project=project_folder
+                        project=project_folder,
                     )
                 }
             },
@@ -731,7 +788,7 @@ class Command(ServerManagementBaseCommand):
                 'ansible_arguments': {
                     'module_name': 'file',
                     'module_args': 'path=/var/www/{project}/.venv recurse=yes owner={project} group=webapps state=directory'.format(
-                        project=project_folder
+                        project=project_folder,
                     )
                 }
             }
@@ -741,10 +798,22 @@ class Command(ServerManagementBaseCommand):
         # Define nginx tasks
         nginx_tasks = [
             {
-                'title': "Install Nginx",
+                'title': "Install Nginx and Certbot",
                 'ansible_arguments': {
                     'module_name': 'apt',
-                    'module_args': 'name=nginx state=installed'
+                    'module_args': 'name={item} force=yes state=present'
+                },
+                'with_items': [
+                    'nginx',
+                    'certbot',
+                    'python-certbot-nginx',
+                ],
+            },
+            {
+                'title': "Ensure Nginx service is stopped",  # This allows Certbot to run.
+                'ansible_arguments': {
+                    'module_name': 'service',
+                    'module_args': 'name=nginx state=stopped enabled=yes'
                 }
             },
             {
@@ -753,7 +822,7 @@ class Command(ServerManagementBaseCommand):
                     'module_name': 'copy',
                     'module_args': 'src={} dest=/etc/nginx/sites-available/{} backup=yes'.format(
                         session_files['nginx_site_config'].name,
-                        project_folder
+                        project_folder,
                     )
                 }
             },
@@ -776,15 +845,25 @@ class Command(ServerManagementBaseCommand):
                 'ansible_arguments': {
                     'module_name': 'command',
                     'module_args': 'ln -s /etc/nginx/sites-available/{project} /etc/nginx/sites-enabled/{project} creates=/etc/nginx/sites-enabled/{project}'.format(
-                        project=project_folder
+                        project=project_folder,
                     )
                 }
             },
             {
-                'title': "Reload Nginx",
+                'title': 'Run certbot',
                 'ansible_arguments': {
                     'module_name': 'command',
-                    'module_args': 'service nginx reload'
+                    'module_args': 'certbot certonly --standalone -n --agree-tos --email developers@onespacemedia.com --cert-name {} --domains {}'.format(
+                        fallback_domain_name,
+                        ','.join(setup_ssl_for)
+                    )
+                }
+            },
+            {
+                'title': 'Generate DH parameters (this may take a little while)',
+                'ansible_arguments': {
+                    'module_name': 'command',
+                    'module_args': 'openssl dhparam -out /etc/ssl/dhparam.pem 2048'
                 }
             },
             {
@@ -805,7 +884,7 @@ class Command(ServerManagementBaseCommand):
                     'module_name': 'copy',
                     'module_args': 'src={} dest=/etc/supervisor/conf.d/{}.conf backup=yes'.format(
                         session_files['supervisor_config'].name,
-                        project_folder
+                        project_folder,
                     )
                 }
             },
@@ -821,7 +900,7 @@ class Command(ServerManagementBaseCommand):
                 'ansible_arguments': {
                     'module_name': 'copy',
                     'module_args': 'src={} dest=/etc/supervisor/conf.d/memcached.conf backup=yes'.format(
-                        session_files['memcached_supervisor_config'].name
+                        session_files['memcached_supervisor_config'].name,
                     )
                 }
             },
@@ -892,13 +971,21 @@ class Command(ServerManagementBaseCommand):
                     }
                 },
                 {
+                    'title': 'Ensure static folder exists in project',
+                    'ansible_arguments': {
+                        'module_name': 'file',
+                        'module_args': 'state=directory owner={project} group=webapps path=/var/www/{project}/{project}/static/'.format(
+                            project=project_folder,
+                        )
+                    }
+                },
+                {
                     'title': "Collect static files",
                     'ansible_arguments': {
                         'module_name': 'django_manage',
                         'module_args': 'command=collectstatic app_path=/var/www/{project} virtualenv=/var/www/{project}/.venv settings={project}.settings.{settings}'.format(
                             project=project_folder,
-                            settings=remote['server'].get('settings_file',
-                                                          'production'),
+                            settings=remote['server'].get('settings_file', 'production'),
                         )
                     }
                 }
