@@ -10,14 +10,14 @@ from fabric.api import abort, env, hide, local, lcd, prompt, settings
 from fabric.contrib.console import confirm
 import requests
 
-from ._core import load_config, ansible_task, run_tasks, check_request, ServerManagementBaseCommand
+from ._core import load_config, run_tasks, check_request, ServerManagementBaseCommand
 
 
 class Command(ServerManagementBaseCommand):
 
     def handle(self, *args, **options):
         # Load server config from project
-        config, remote = load_config(env, options.get('remote', ''), config_user='root')
+        config, remote = load_config(env, options.get('remote', ''), config_user='root', debug=options['debug'])
 
         # Set local project path
         local_project_path = django_settings.SITE_ROOT
@@ -38,18 +38,15 @@ class Command(ServerManagementBaseCommand):
                 remotes = local('git remote', capture=True).split('\n')
 
                 if len(remotes) == 1:
-                    git_remote = local(
-                        'git config --get remote.{}.url'.format(remotes[0]), capture=True)
+                    git_remote = local('git config --get remote.{}.url'.format(remotes[0]), capture=True)
                 else:
                     def validate_choice(choice):
                         if choice in remotes:
                             return choice
                         raise Exception("That is not a valid choice.")
 
-                    choice = prompt(
-                        "Which Git remote would you like to use?", validate=validate_choice)
-                    git_remote = local(
-                        'git config --get remote.{}.url'.format(choice), capture=True)
+                    choice = prompt("Which Git remote would you like to use?", validate=validate_choice)
+                    git_remote = local('git config --get remote.{}.url'.format(choice), capture=True)
 
                 # Is this a bitbucket repo?
                 is_bitbucket_repo = 'git@bitbucket.org' in git_remote
@@ -72,24 +69,21 @@ class Command(ServerManagementBaseCommand):
                         github_account = gh_regex.group(1)
                         github_repo = gh_regex.group(2)
                     else:
-                        print 'Unable to determine Github details.'
-                        exit()
+                        raise Exception('Unable to determine Github details.')
                 else:
-                    print 'Unable to determine Git host from remote URL: {}'.format(git_remote)
-                    exit()
+                    raise Exception('Unable to determine Git host from remote URL: {}'.format(git_remote))
 
                 project_folder = local_project_path.replace(os.path.abspath(os.path.join(local_project_path, '..')) + '/', '')
 
                 with settings(warn_only=True):
                     if local('[[ -e ../requirements.txt ]]').return_code:
-                        print "No requirements.txt"
-                        exit()
+                        raise Exception("No requirements.txt")
 
         # Compress the domain names for nginx
         domain_names = " ".join(django_settings.ALLOWED_HOSTS)
 
         # Use the site domain as a fallback domain
-        fallback_domain_name = raw_input("What should the default domain be? ({}) ".format(django_settings.SITE_DOMAIN)) or django_settings.SITE_DOMAIN
+        fallback_domain_name = prompt("What should the default domain be?", default=django_settings.SITE_DOMAIN)
 
         domain_names = prompt('Which domains would you like to enable in nginx?', default=domain_names)
 
@@ -183,92 +177,70 @@ class Command(ServerManagementBaseCommand):
         # Define base tasks
         base_tasks = [
             # Add nginx and Let's Encrypt PPAs.  We add them up here because an
-            # `apt-get update` is require for them to be truly added, and that
-            # comes next already.
+            # `apt-get update` is require for them to be truly added and that
+            # comes next.
             {
                 'title': 'Add nginx PPA',
-                'ansible_arguments': {
-                    'module_name': 'apt_repository',
-                    'module_args': 'repo=ppa:nginx/stable state=present'
-                }
+                'command': 'add-apt-repository -y ppa:nginx/stable',
             },
             {
                 'title': "Add Let's Encrypt PPA",
-                'ansible_arguments': {
-                    'module_name': 'apt_repository',
-                    'module_args': 'repo=ppa:certbot/certbot state=present'
-                }
+                'command': 'add-apt-repository -y ppa:certbot/certbot',
             },
             {
-                'title': "Update apt cache and upgrade everything",
-                'ansible_arguments': {
-                    'module_name': 'apt',
-                    'module_args': 'update_cache=yes upgrade=yes'
-                }
+                'title': 'Update apt cache',
+                'command': 'apt-get update',
+            },
+            {
+                'title': 'Upgrade everything',
+                'command': 'apt-get upgrade -y',
             },
             {
                 'title': 'Install unattended-upgrades',
-                'ansible_arguments': {
-                    'module_name': 'apt',
-                    'module_args': 'pkg=unattended-upgrades state=present'
-                }
+                'command': 'apt-get install -y unattended-upgrades',
             },
             {
-                'title': 'Adjust APT update intervals',
-                'ansible_arguments': {
-                    'module_name': 'copy',
-                    'module_args': 'src={} dest=/etc/apt/apt.conf.d/10periodic'.format(
-                        session_files['apt_periodic'].name,
-                    )
-                }
-            },
-            {
-                'title': 'Make sure unattended-upgrades only installs from $ubuntu_release-security',
-                'ansible_arguments': {
-                    'module_name': 'lineinfile',
-                    'module_args': 'dest=/etc/apt/apt.conf.d/50unattended-upgrades regexp="$ubuntu_release-updates" state=absent'
-                }
-            },
-            {
-                'title': "Install the following base packages",
-                'ansible_arguments': {
-                    'module_name': 'apt',
-                    'module_args': 'name={item} force=yes state=present'
-                },
-                'with_items': [
-                    'build-essential',
-                    'git',
-                    'python-dev',
-                    'python-pip',
-                    'python-passlib',  # Required for generating the htpasswd file
-                    'supervisor',
-                    'libjpeg-dev',
-                    'libffi-dev',
-                    'libssl-dev',  # Required for nvm.
-                    'nodejs',
-                    'memcached',
-                ] + (
-                    ['libgeoip-dev'] if optional_packages.get('geoip', True) else []
-                ) + (
-                    ['libmysqlclient-dev'] if optional_packages.get('mysql', True) else []
+                'title': "Install the base packages",
+                'command': 'apt-get install -y {}'.format(
+                    ' '.join([
+                        'build-essential',
+                        'git',
+                        'python-dev',
+                        'python-pip',
+                        'python-passlib',  # Required for generating the htpasswd file
+                        'supervisor',
+                        'libjpeg-dev',
+                        'libffi-dev',
+                        'libssl-dev',  # Required for nvm.
+                        'nodejs',
+                        'memcached',
+                        'libgeoip-dev' if optional_packages.get('geoip', True) else '',
+                        'libmysqlclient-dev' if optional_packages.get('mysql', True) else '',
+                    ])
                 )
             },
             {
+                'title': 'Adjust APT update intervals',
+                'fabric_command': 'put',
+                'fabric_args': [session_files['apt_periodic'].name, '/etc/apt/apt.conf.d/10periodic'],
+            },
+            {
+                'title': 'Update pip',
+                'command': 'pip install -U pip',
+            },
+            {
                 'title': "Install virtualenv",
-                'ansible_arguments': {
-                    'module_name': 'pip',
-                    'module_args': 'name=virtualenv'
-                }
+                'command': 'pip install virtualenv',  # TODO: Will this need to change if we use Python 3? (probably)
             },
             {
                 'title': "Set the timezone to UTC",
-                'ansible_arguments': {
-                    'module_name': 'file',
-                    'module_args': 'src=/usr/share/zoneinfo/UTC dest=/etc/localtime force=yes state=link'
-                }
+                'command': 'timedatectl set-timezone UTC',
             }
         ]
+
         run_tasks(env, base_tasks)
+
+        exit()
 
         # Configure the firewall.
         firewall_tasks = [
