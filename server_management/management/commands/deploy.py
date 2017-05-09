@@ -321,7 +321,7 @@ class Command(ServerManagementBaseCommand):
                 'title': "Add authorized keys",
                 'ansible_arguments': {
                     'module_name': 'command',
-                    'module_args': 'mv /root/.ssh/authorized_keys /home/deploy/.ssh/authorized_keys '
+                    'module_args': 'mv ~{}/.ssh/authorized_keys /home/deploy/.ssh/authorized_keys '.format(remote.get('initial_user', 'root'))
                                    'creates=/home/deploy/.ssh/authorized_keys'
                 }
             },
