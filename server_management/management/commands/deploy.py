@@ -205,6 +205,7 @@ class Command(ServerManagementBaseCommand):
                         # Base requirements
                         'build-essential',
                         'git',
+                        'ufw',  # Installed by default on Ubuntu, not elsewhere
 
                         # Project requirements
                         'python-dev',
