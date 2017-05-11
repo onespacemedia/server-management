@@ -92,7 +92,6 @@ class Command(ServerManagementBaseCommand):
             domain_name
             for domain_name in domain_names.split(' ')
             if local('dig +short {}'.format(domain_name), capture=True) == remote['server']['ip']
-            # if confirm('Would you like to configure SSL for {}?'.format(domain_name))
         ]
 
         if not setup_ssl_for:
@@ -203,8 +202,11 @@ class Command(ServerManagementBaseCommand):
                 'title': "Install the base packages",
                 'command': 'apt-get install -y {}'.format(
                     ' '.join([
+                        # Base requirements
                         'build-essential',
                         'git',
+
+                        # Project requirements
                         'python-dev',
                         'python-pip',
                         'python-passlib',  # Required for generating the htpasswd file
@@ -214,6 +216,14 @@ class Command(ServerManagementBaseCommand):
                         'libssl-dev',  # Required for nvm.
                         'nodejs',
                         'memcached',
+                        'fail2ban',
+
+                        # Postgres requirements
+                        'postgresql',
+                        'libpq-dev',
+                        'python-psycopg2',  # TODO: Is this required?
+
+                        # Other
                         'libgeoip-dev' if optional_packages.get('geoip', True) else '',
                         'libmysqlclient-dev' if optional_packages.get('mysql', True) else '',
                     ])
@@ -240,79 +250,43 @@ class Command(ServerManagementBaseCommand):
 
         run_tasks(env, base_tasks)
 
-        exit()
-
-        # Configure the firewall.
-        firewall_tasks = [
-            {
-                'title': 'Allow SSH connections through the firewall',
-                'ansible_arguments': {
-                    'module_name': 'ufw',
-                    'module_args': 'rule=allow port=22 proto=tcp'
-                }
-            },
-            {
-                'title': 'Allow HTTP connections through the firewall',
-                'ansible_arguments': {
-                    'module_name': 'ufw',
-                    'module_args': 'rule=allow port=80 proto=tcp'
-                }
-            },
-            {
-                'title': 'Allow HTTPS connections through the firewall',
-                'ansible_arguments': {
-                    'module_name': 'ufw',
-                    'module_args': 'rule=allow port=443 proto=tcp'
-                }
-            },
-            {
-                'title': 'Enable the firewall, deny all other traffic',
-                'ansible_arguments': {
-                    'module_name': 'ufw',
-                    'module_args': 'state=enabled policy=deny'
-                }
-            }
-        ]
-
-        run_tasks(env, firewall_tasks)
-
         # Configure swap
         swap_tasks = [
             {
                 'title': 'Create a swap file',
-                'ansible_arguments': {
-                    'module_name': 'command',
-                    'module_args': 'fallocate -l 4G /swapfile'
-                }
+                'command': 'fallocate -l 4G /swapfile',
             },
             {
                 'title': 'Set permissions on swapfile to 600',
-                'ansible_arguments': {
-                    'module_name': 'file',
-                    'module_args': 'path=/swapfile owner=root group=root mode=0600'
-                }
-
+                'command': 'chmod 0600 /swapfile'
             },
             {
                 'title': 'Format swapfile for swap',
-                'ansible_arguments': {
-                    'module_name': 'command',
-                    'module_args': 'mkswap /swapfile'
-                }
+                'command': 'mkswap /swapfile',
             },
             {
                 'title': 'Add the file to the system as a swap file',
-                'ansible_arguments': {
-                    'module_name': 'command',
-                    'module_args': 'swapon /swapfile'
-                }
+                'command': 'swapon /swapfile',
             },
             {
                 'title': 'Write fstab line for swapfile',
-                'ansible_arguments': {
-                    'module_name': 'mount',
-                    'module_args': 'name=none src=/swapfile fstype=swap opts=sw passno=0 dump=0 state=present'
-                }
+                'command': "echo '/swapfile none swap sw 0 0' >> /etc/fstab",
+            },
+            {
+                'title': 'Change swappiness',
+                'command': 'sysctl vm.swappiness=10'
+            },
+            {
+                'title': 'Write swappiness to file',
+                'command': "echo 'vm.swappiness=10' >> /etc/sysctl.conf",
+            },
+            {
+                'title': 'Reduce cache pressure',
+                'command': 'sysctl vm.vfs_cache_pressure=50',
+            },
+            {
+                'title': 'Write cache pressure to file',
+                'command': "echo 'vm.vfs_cache_pressure=50' >> /etc/sysctl.conf",
             }
         ]
 
@@ -321,78 +295,62 @@ class Command(ServerManagementBaseCommand):
         # Define SSH tasks
         ssh_tasks = [
             {
-                'title': 'Install fail2ban',
-                'ansible_arguments': {
-                    'module_name': 'apt',
-                    'module_args': 'name={item} state=present'
-                },
-                'with_items': [
-                    'fail2ban'
-                ]
-            },
-            {
                 'title': "Create the application group",
-                'ansible_arguments': {
-                    'module_name': 'group',
-                    'module_args': 'name=webapps system=yes state=present'
-                }
+                'command': 'addgroup -r webapps',  # -r creates a 'system' group
             },
             {
                 'title': 'Add deploy user',
+                'command': 'adduser --shell /bin/bash --disabled-password deploy webapps',
                 'ansible_arguments': {
                     'module_name': 'user',
                     'module_args': 'name=deploy group=webapps generate_ssh_key=yes shell=/bin/bash'
                 }
             },
             {
-                'title': "Add authorized keys",
-                'ansible_arguments': {
-                    'module_name': 'command',
-                    'module_args': 'mv ~{}/.ssh/authorized_keys /home/deploy/.ssh/authorized_keys '.format(remote.get('initial_user', 'root'))
-                                   'creates=/home/deploy/.ssh/authorized_keys'
-                }
+                'title': 'Generate SSH keys for deploy user',
+                'command': "ssh-keygen -C test -f ~deploy/.ssh/id_rsa -N ''"
             },
             {
-                'title': 'Fix file permissions of deploy authorized keys',
-                'ansible_arguments': {
-                    'module_name': 'file',
-                    'module_args': 'path=/home/deploy/.ssh/authorized_keys owner=deploy group=webapps'
-                }
+                'title': "Add authorized keys to deploy user",
+                'command': 'mv /root/.ssh/authorized_keys /home/deploy/.ssh/authorized_keys ',
+            },
+            {
+                'title': 'Check deploy user file permissions',
+                'command': '; '.join([
+                    'chmod 0750 ~deploy',
+                    'chmod 0700 ~deploy/.ssh',
+                    'chmod 0600 ~deploy/.ssh/id_rsa',
+                    'chmod 0644 ~deploy/.ssh/id_rsa.pub',
+                    'chown deploy:webapps ~deploy/.ssh/authorized_keys',
+                ]),
             },
             {
                 'title': 'Remove sudo group rights',
-                'ansible_arguments': {
-                    'module_name': 'lineinfile',
-                    'module_args': 'dest=/etc/sudoers regexp="^%sudo" state=absent'
-                }
+                'command': "sed -i 's/^%sudo/# %sudo/' /etc/sudoers",
+            },
+            {
+                'title': 'Enable the sudoers include',
+                'command': "sed -i 's/^#includedir/includedir/' /etc/sudoers",
             },
             {
                 'title': 'Add deploy user to sudoers',
-                'ansible_arguments': {
-                    'module_name': 'lineinfile',
-                    'module_args': 'dest=/etc/sudoers regexp="deploy ALL" line="deploy ALL=(ALL:ALL) NOPASSWD: ALL" state=present'
-                }
+                'command': 'echo "deploy ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/deploy',
+            },
+            {
+                'title': 'Ensure the deploy sudoers file has the correct permissions',
+                'command': 'chmod 0440 /etc/sudoers.d/deploy',
             },
             {
                 'title': 'Disallow root SSH access',
-                'ansible_arguments': {
-                    'module_name': 'lineinfile',
-                    'module_args': 'dest=/etc/ssh/sshd_config regexp="^PermitRootLogin" line="PermitRootLogin no" state=present'
-                }
+                'command': "sed -i 's/^PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config",
             },
             {
                 'title': 'Disallow password authentication',
-                'ansible_arguments': {
-                    'module_name': 'lineinfile',
-                    'module_args': 'dest=/etc/ssh/sshd_config regexp="^PasswordAuthentication" line="PasswordAuthentication no" state=present'
-                }
+                'command': "sed -i 's/^PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config",
             },
             {
                 'title': 'Restart SSH',
-                'ansible_arguments': {
-                    'module_name': 'service',
-                    'module_args': 'name=ssh state=restarted'
-                }
+                'command': 'service ssh restart',
             }
         ]
         run_tasks(env, ssh_tasks)
@@ -400,64 +358,31 @@ class Command(ServerManagementBaseCommand):
         # Define db tasks
         db_tasks = [
             {
-                'title': "Install PostgreSQL",
-                'ansible_arguments': {
-                    'module_name': 'apt',
-                    'module_args': 'name={item} force=yes state=present'
-                },
-                'with_items': [
-                    'postgresql-9.3',
-                    'postgresql-contrib-9.3',
-                    'libpq-dev',
-                    'python-psycopg2',
-                    'pgtune'
-                ]
+                'title': "Ensure the PostgreSQL service is running",  # Why?
+                'command': 'service postgresql start',
             },
             {
-                'title': "Ensure the PostgreSQL service is running",
-                'ansible_arguments': {
-                    'module_name': 'service',
-                    'module_args': 'name=postgresql state=started enabled=yes'
-                }
+                'title': 'Modify the locales config',
+                'command': '; '.join([
+                    "sed -i 's/^# en_GB.UTF-8/en_GB.UTF-8/' /etc/locale.gen",  # Uncomment the GB line
+                    "sed -i 's/^en_US.UTF-8/# en_US.UTF-8/' /etc/locale.gen",  # Comment out the US line
+                ]),
             },
             {
-                'title': "Backuping PostgreSQL main config file",
-                'ansible_arguments': {
-                    'module_name': 'command',
-                    'module_args': 'mv /etc/postgresql/9.3/main/postgresql.conf '
-                                   '/etc/postgresql/9.3/main/postgresql.conf.old '
-                                   'creates=/etc/postgresql/9.3/main/postgresql.conf.old'
-                }
+                'title': "Generate locales",
+                'command': 'locale-gen --purge',
             },
             {
-                'title': "Optimising PostgreSQL via pgtune",
-                'ansible_arguments': {
-                    'module_name': 'command',
-                    'module_args': 'pgtune -i /etc/postgresql/9.3/main/postgresql.conf.old -o '
-                                   '/etc/postgresql/9.3/main/postgresql.conf --type=Web',
-                    'sudo_user': 'postgres'
-                }
-            },
-            {
-                'title': "Ensure we have the database locale",
-                'ansible_arguments': {
-                    'module_name': 'locale_gen',
-                    'module_args': 'name=en_GB.UTF-8 state=present'
-                }
+                'title': 'Modify default locales',
+                'command': "sed -i 's/en_US/en_GB/' /etc/default/locale",
             },
             {
                 'title': 'Reconfigure locales',
-                'ansible_arguments': {
-                    'module_name': 'command',
-                    'module_args': 'dpkg-reconfigure locales'
-                }
+                'command': 'LANG=en_GB.UTF-8 dpkg-reconfigure -f noninteractive locales',
             },
             {
-                'title': "Restart PostgreSQL",
-                'ansible_arguments': {
-                    'module_name': 'service',
-                    'module_args': 'name=postgresql state=restarted enabled=yes'
-                }
+                'title': "Restart PostgreSQL",  # Why?
+                'command': 'service postgresql restart',
             },
             {
                 'title': "Ensure database is created",
@@ -654,10 +579,7 @@ class Command(ServerManagementBaseCommand):
         venv_tasks = [
             {
                 'title': "Create the virtualenv",
-                'ansible_arguments': {
-                    'module_name': 'command',
-                    'module_args': 'virtualenv /var/www/{project}/.venv --no-site-packages creates=/var/www/{project}/.venv'.format(
-                        project=project_folder,
+                'command': 'virtualenv /var/www/{project}/.venv --no-site-packages creates=/var/www/{project}/.venv'.format(,
                     )
                 }
             },
@@ -682,10 +604,7 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': "Create the application log file",
-                'ansible_arguments': {
-                    'module_name': 'command',
-                    'module_args': 'touch /var/log/gunicorn_supervisor.log creates=/var/log/gunicorn_supervisor.log'
-                }
+                'command': 'touch /var/log/gunicorn_supervisor.log creates=/var/log/gunicorn_supervisor.log',
             },
             {
                 'title': "Set permission to the application log file",
@@ -807,36 +726,24 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': "Ensure that the default site is disabled",
-                'ansible_arguments': {
-                    'module_name': 'command',
-                    'module_args': 'rm /etc/nginx/sites-enabled/default removes=/etc/nginx/sites-enabled/default'
-                }
+                'command': 'rm /etc/nginx/sites-enabled/default removes=/etc/nginx/sites-enabled/default',
             },
             {
                 'title': "Ensure that the application site is enabled",
-                'ansible_arguments': {
-                    'module_name': 'command',
-                    'module_args': 'ln -s /etc/nginx/sites-available/{project} /etc/nginx/sites-enabled/{project} creates=/etc/nginx/sites-enabled/{project}'.format(
-                        project=project_folder,
+                'command': 'ln -s /etc/nginx/sites-available/{project} /etc/nginx/sites-enabled/{project} creates=/etc/nginx/sites-enabled/{project}'.format(,
                     )
                 }
             },
             {
                 'title': 'Run certbot',
-                'ansible_arguments': {
-                    'module_name': 'command',
-                    'module_args': 'certbot certonly --standalone -n --agree-tos --email developers@onespacemedia.com --cert-name {} --domains {}'.format(
-                        fallback_domain_name,
+                'command': 'certbot certonly --standalone -n --agree-tos --email developers@onespacemedia.com --cert-name {} --domains {}'.format(,
                         ','.join(setup_ssl_for)
                     )
                 }
             },
             {
                 'title': 'Generate DH parameters (this may take a little while)',
-                'ansible_arguments': {
-                    'module_name': 'command',
-                    'module_args': 'openssl dhparam -out /etc/ssl/dhparam.pem 2048'
-                }
+                'command': 'openssl dhparam -out /etc/ssl/dhparam.pem 2048',
             },
             {
                 'title': "Ensure Nginx service is started",
@@ -847,6 +754,24 @@ class Command(ServerManagementBaseCommand):
             },
         ]
         run_tasks(env, nginx_tasks)
+
+        # Configure the firewall.
+        firewall_tasks = [
+            {
+                'title': 'Allow SSH connections through the firewall',
+                'command': 'ufw allow OpenSSH'
+            },
+            {
+                'title': 'Allow SSH connections through the firewall',
+                'command': 'ufw allow "Nginx Full"'
+            },
+            {
+                'title': 'Enable the firewall, deny all other traffic',
+                'command': 'ufw --force enable',  # --force makes it non-interactive
+            }
+        ]
+
+        run_tasks(env, firewall_tasks)
 
         # Define supervisor tasks
         supervisor_tasks = [
@@ -878,17 +803,11 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': "Re-read the Supervisor config files",
-                'ansible_arguments': {
-                    'module_name': 'command',
-                    'module_args': 'supervisorctl reread'
-                }
+                'command': 'supervisorctl reread',
             },
             {
                 'title': "Update Supervisor to add the app in the process group",
-                'ansible_arguments': {
-                    'module_name': 'command',
-                    'module_args': 'supervisorctl update'
-                }
+                'command': 'supervisorctl update',
             },
         ]
         run_tasks(env, supervisor_tasks)
