@@ -312,7 +312,7 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': "Add authorized keys to deploy user",
-                'command': 'mv /root/.ssh/authorized_keys /home/deploy/.ssh/authorized_keys ',
+                'command': 'mv /root/.ssh/authorized_keys /home/deploy/.ssh/authorized_keys',  # TODO: Integrate the initial_user fix.
             },
             {
                 'title': 'Check deploy user file permissions',
