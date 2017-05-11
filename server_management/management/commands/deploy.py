@@ -580,9 +580,9 @@ class Command(ServerManagementBaseCommand):
         venv_tasks = [
             {
                 'title': "Create the virtualenv",
-                'command': 'virtualenv /var/www/{project}/.venv --no-site-packages creates=/var/www/{project}/.venv'.format(,
-                    )
-                }
+                'command': 'virtualenv /var/www/{project}/.venv --no-site-packages'.format(
+                    project=project_folder,
+                ),
             },
             {
                 'title': "Create the Gunicorn script file",
@@ -605,7 +605,7 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': "Create the application log file",
-                'command': 'touch /var/log/gunicorn_supervisor.log creates=/var/log/gunicorn_supervisor.log',
+                'command': 'touch /var/log/gunicorn_supervisor.log',
             },
             {
                 'title': "Set permission to the application log file",
@@ -727,20 +727,20 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': "Ensure that the default site is disabled",
-                'command': 'rm /etc/nginx/sites-enabled/default removes=/etc/nginx/sites-enabled/default',
+                'command': 'rm /etc/nginx/sites-enabled/default',
             },
             {
                 'title': "Ensure that the application site is enabled",
-                'command': 'ln -s /etc/nginx/sites-available/{project} /etc/nginx/sites-enabled/{project} creates=/etc/nginx/sites-enabled/{project}'.format(,
-                    )
-                }
+                'command': 'ln -s /etc/nginx/sites-available/{project} /etc/nginx/sites-enabled/{project}'.format(
+                    project=project_folder,
+                ),
             },
             {
                 'title': 'Run certbot',
-                'command': 'certbot certonly --standalone -n --agree-tos --email developers@onespacemedia.com --cert-name {} --domains {}'.format(,
-                        ','.join(setup_ssl_for)
-                    )
-                }
+                'command': 'certbot certonly --standalone -n --agree-tos --email developers@onespacemedia.com --cert-name {} --domains {}'.format(
+                    fallback_domain_name,
+                    ','.join(setup_ssl_for)
+                ),
             },
             {
                 'title': 'Generate DH parameters (this may take a little while)',
