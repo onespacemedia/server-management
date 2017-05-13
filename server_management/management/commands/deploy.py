@@ -6,11 +6,12 @@ from urllib import urlencode
 from django.conf import settings as django_settings
 from django.core.files.temp import NamedTemporaryFile
 from django.template.loader import render_to_string
-from fabric.api import abort, env, hide, local, lcd, prompt, settings
+from fabric.api import abort, env, fastprint, hide, local, lcd, prompt, run, settings
+from fabric.colors import green, yellow, red
 from fabric.contrib.console import confirm
 import requests
 
-from ._core import load_config, run_tasks, check_request, ServerManagementBaseCommand
+from ._core import load_config, run_tasks, check_request, ServerManagementBaseCommand, title_print
 
 
 class Command(ServerManagementBaseCommand):
@@ -83,9 +84,11 @@ class Command(ServerManagementBaseCommand):
         domain_names = " ".join(django_settings.ALLOWED_HOSTS)
 
         # Use the site domain as a fallback domain
-        fallback_domain_name = prompt("What should the default domain be?", default=django_settings.SITE_DOMAIN)
+        fallback_domain_name = django_settings.SITE_DOMAIN
 
-        domain_names = prompt('Which domains would you like to enable in nginx?', default=domain_names)
+        if not options['noinput']:
+            fallback_domain_name = prompt("What should the default domain be?", default=fallback_domain_name)
+            domain_names = prompt('Which domains would you like to enable in nginx?', default=domain_names)
 
         # If the domain is pointing to the droplet already, we can setup SSL.
         setup_ssl_for = [
@@ -167,6 +170,30 @@ class Command(ServerManagementBaseCommand):
         session_files['apt_periodic'].write(render_to_string('apt_periodic'))
         session_files['apt_periodic'].close()
 
+        # Define the locales first.
+        locale_tasks = [
+            {
+                'title': 'Modify the locales config',
+                'command': '; '.join([
+                    "sed -i 's/^# en_GB.UTF-8/en_GB.UTF-8/' /etc/locale.gen",  # Uncomment the GB line
+                ]),
+            },
+            {
+                'title': "Generate locales",
+                'command': 'locale-gen --purge',
+            },
+            {
+                'title': 'Modify default locales',
+                'command': "sed -i 's/en_US/en_GB/' /etc/default/locale",
+            },
+            {
+                'title': 'Reconfigure locales',
+                'command': 'LANG=en_GB.UTF-8 dpkg-reconfigure -f noninteractive locales',
+            },
+        ]
+
+        run_tasks(env, locale_tasks)
+
         # Check if optional packages are defined in the config.
         optional_packages = {}
 
@@ -210,6 +237,7 @@ class Command(ServerManagementBaseCommand):
                         # Project requirements
                         'python-dev',
                         'python-pip',
+                        'apache2-utils',  # Required for htpasswd
                         'python-passlib',  # Required for generating the htpasswd file
                         'supervisor',
                         'libjpeg-dev',
@@ -218,6 +246,11 @@ class Command(ServerManagementBaseCommand):
                         'nodejs',
                         'memcached',
                         'fail2ban',
+
+                        # Nginx things
+                        'nginx',
+                        'certbot',
+                        'python-certbot-nginx',
 
                         # Postgres requirements
                         'postgresql',
@@ -291,25 +324,63 @@ class Command(ServerManagementBaseCommand):
             }
         ]
 
-        run_tasks(env, swap_tasks)
+        # Check to see if we've already configured a swap file. This handles
+        # the case where the deploy command is being re-run.
+        cache_pressure = run('cat /proc/sys/vm/vfs_cache_pressure')
+
+        if cache_pressure != '50':
+            run_tasks(env, swap_tasks)
 
         # Define SSH tasks
         ssh_tasks = [
             {
                 'title': "Create the application group",
-                'command': 'addgroup -r webapps',  # -r creates a 'system' group
+                'command': 'addgroup --system webapps',
+            },
+            {
+                'title': 'Add the application user',
+                'command': 'adduser --shell /bin/bash --system --disabled-password --ingroup webapps {name}'.format(
+                    name=project_folder,
+                ),
+            },
+            {
+                'title': "Add .ssh folder to application user's home directory",
+                'command': 'mkdir ~{}/.ssh'.format(project_folder),
+            },
+            {
+                'title': 'Generate SSH keys for application user',
+                'command': "ssh-keygen -C test -f ~{}/.ssh/id_rsa -N ''".format(
+                    project_folder,
+                )
+            },
+            {
+                'title': "Make the application directory",
+                'command': '; '.join([
+                    'mkdir -m 0775 -p /var/www/{project}',
+                    'chown {project}:webapps /var/www/{project}',
+                ]).format(
+                    project=project_folder,
+                ),
+            },
+            {
+                'title': 'Check application user file permissions',
+                'command': '&& '.join([
+                    'chmod 0750 ~{project}',
+                    'chmod 0700 ~{project}/.ssh',
+                    'chmod 0600 ~{project}/.ssh/id_rsa',
+                    'chmod 0644 ~{project}/.ssh/id_rsa.pub',
+                    'chown -R {project}:webapps ~{project}',
+                ]).format(
+                    project=project_folder,
+                ),
             },
             {
                 'title': 'Add deploy user',
-                'command': 'adduser --shell /bin/bash --disabled-password deploy webapps',
-                'ansible_arguments': {
-                    'module_name': 'user',
-                    'module_args': 'name=deploy group=webapps generate_ssh_key=yes shell=/bin/bash'
-                }
+                'command': 'adduser --shell /bin/bash --disabled-password --system --ingroup webapps deploy',
             },
             {
-                'title': 'Generate SSH keys for deploy user',
-                'command': "ssh-keygen -C test -f ~deploy/.ssh/id_rsa -N ''"
+                'title': "Add .ssh folder to deploy user's home directory",
+                'command': 'mkdir ~deploy/.ssh',
             },
             {
                 'title': "Add authorized keys to deploy user",
@@ -320,9 +391,8 @@ class Command(ServerManagementBaseCommand):
                 'command': '; '.join([
                     'chmod 0750 ~deploy',
                     'chmod 0700 ~deploy/.ssh',
-                    'chmod 0600 ~deploy/.ssh/id_rsa',
-                    'chmod 0644 ~deploy/.ssh/id_rsa.pub',
-                    'chown deploy:webapps ~deploy/.ssh/authorized_keys',
+                    'chmod 0644 ~deploy/.ssh/authorized_keys',
+                    'chown -R deploy:webapps ~deploy',
                 ]),
             },
             {
@@ -330,12 +400,8 @@ class Command(ServerManagementBaseCommand):
                 'command': "sed -i 's/^%sudo/# %sudo/' /etc/sudoers",
             },
             {
-                'title': 'Enable the sudoers include',
-                'command': "sed -i 's/^#includedir/includedir/' /etc/sudoers",
-            },
-            {
                 'title': 'Add deploy user to sudoers',
-                'command': 'echo "deploy ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/deploy',
+                'command': 'echo "deploy ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/deploy',
             },
             {
                 'title': 'Ensure the deploy sudoers file has the correct permissions',
@@ -359,127 +425,59 @@ class Command(ServerManagementBaseCommand):
         # Define db tasks
         db_tasks = [
             {
-                'title': "Ensure the PostgreSQL service is running",  # Why?
-                'command': 'service postgresql start',
-            },
-            {
-                'title': 'Modify the locales config',
-                'command': '; '.join([
-                    "sed -i 's/^# en_GB.UTF-8/en_GB.UTF-8/' /etc/locale.gen",  # Uncomment the GB line
-                    "sed -i 's/^en_US.UTF-8/# en_US.UTF-8/' /etc/locale.gen",  # Comment out the US line
-                ]),
-            },
-            {
-                'title': "Generate locales",
-                'command': 'locale-gen --purge',
-            },
-            {
-                'title': 'Modify default locales',
-                'command': "sed -i 's/en_US/en_GB/' /etc/default/locale",
-            },
-            {
-                'title': 'Reconfigure locales',
-                'command': 'LANG=en_GB.UTF-8 dpkg-reconfigure -f noninteractive locales',
-            },
-            {
-                'title': "Restart PostgreSQL",  # Why?
-                'command': 'service postgresql restart',
+                'title': 'Create the application postgres role',
+                'command': 'su - postgres -c "createuser {name}"'.format(
+                    name=remote['database']['name'],
+                ),
             },
             {
                 'title': "Ensure database is created",
-                'ansible_arguments': {
-                    'module_name': 'postgresql_db',
-                    'module_args': "name='{}' encoding='UTF-8' lc_collate='en_GB.UTF-8' lc_ctype='en_GB.UTF-8' "
-                                   "template='template0' state=present".format(
-                                       remote['database']['name'],
-                                   ),
-                    'sudo_user': 'postgres'
-                }
+                'command': 'su - postgres -c "createdb {name} --encoding=UTF-8 --locale=en_GB.UTF-8 --template=template0 --owner={owner} --no-password"'.format(
+                    name=remote['database']['name'],
+                    owner=remote['database']['user'],
+                ),
             },
             {
                 'title': "Ensure user has access to the database",
-                'ansible_arguments': {
-                    'module_name': 'postgresql_user',
-                    'module_args': "db='{}' name='{}' password='{}' priv=ALL state=present".format(
-                        remote['database']['name'],
-                        remote['database']['user'],
-                        remote['database']['password'],
-                    ),
-                    'sudo_user': 'postgres'
-                }
+                'command': 'su - postgres -c "psql {name} -c \'GRANT ALL ON DATABASE {name} TO {owner}\'"'.format(
+                    name=remote['database']['name'],
+                    owner=remote['database']['user'],
+                ),
             },
             {
                 'title': "Ensure user does not have unnecessary privileges",
-                'ansible_arguments': {
-                    'module_name': 'postgresql_user',
-                    'module_args': 'name={} role_attr_flags=NOSUPERUSER,NOCREATEDB state=present'.format(
-                        remote['database']['name'],
-                    ),
-                    'sudo_user': 'postgres'
-                }
-            },
-            {
-                'title': 'Pre-empt PostgreSQL breaking..',
-                'ansible_arguments': {
-                    'module_name': 'lineinfile',
-                    'module_args': 'dest=/etc/postgresql/9.3/main/pg_ctl.conf regexp="^pg_ctl_options" line="pg_ctl_options = \'-l /tmp/pg.log\'" state=present'
-                }
+                'command': 'su - postgres -c "psql {name} -c \'ALTER USER {owner} WITH NOSUPERUSER NOCREATEDB\'"'.format(
+                    name=remote['database']['name'],
+                    owner=remote['database']['user'],
+                ),
             },
         ]
         run_tasks(env, db_tasks)
 
-        # Define web tasks
-        web_tasks = [
-            {
-                'title': "Add the application user to the application group",
-                'ansible_arguments': {
-                    'module_name': 'user',
-                    'module_args': 'name={} group=webapps state=present'.format(
-                        project_folder,
-                    )
-                }
-            },
-            {
-                'title': "Create the project directory",
-                'ansible_arguments': {
-                    'module_name': 'file',
-                    'module_args': 'path=/var/www/{} owner={} group=webapps mode=0775 state=directory'.format(
-                        project_folder,
-                        project_folder,
-                    )
-                }
-            }
-        ]
-        run_tasks(env, web_tasks)
-
         # Get SSH Key from server
-        print "[\033[95mTASK\033[0m] Request SSH key from server..."
-        ssh_key_request = ansible_task(
-            env,
-            module_name='shell',
-            module_args='cat /home/deploy/.ssh/id_rsa.pub',
-        )
-        check_request(ssh_key_request, env, "TASK")
-        ssh_key = ssh_key_request['contacted'][env.host_string]['stdout']
+        ssh_key = run('cat ~{}/.ssh/id_rsa.pub'.format(project_folder))
 
-        print ""
         # Get the current SSH keys in the repo
         if is_bitbucket_repo:
-            print "[\033[95mTASK\033[0m] Checking bitbucket repository for an existing SSH key..."
+            task_title = 'Checking bitbucket repository for an existing SSH key'
+
+            title_print(task_title, state='task')
+
             try:
                 repo_ssh_keys = requests.get('https://bitbucket.org/api/1.0/repositories/{}/{}/deploy-keys/'.format(
                     bitbucket_account,
                     bitbucket_repo,
                 ), auth=(bitbucket_username, bitbucket_password))
             except:
-                print "[\033[95mTASK\033[0m] [\033[91mFAILED\033[0m]"
+                title_print(task_title, state='failed')
                 exit()
-            print "[\033[95mTASK\033[0m] [\033[92mDONE\033[0m]"
 
-            print ""
+            title_print(task_title, state='succeeded')
+
+            task_title = 'Adding the SSH key to bitbucket'
 
             if repo_ssh_keys.text.find(ssh_key) == -1:
-                print "[\033[95mTASK\033[0m] Adding the SSH key to bitbucket..."
+                title_print(task_title, state='task')
 
                 try:
                     requests.post(
@@ -493,16 +491,16 @@ class Command(ServerManagementBaseCommand):
                         }),
                         auth=(bitbucket_username, bitbucket_password)
                     )
-                except Exception as error:
-                    raise error
-                    print "[\033[95mTASK\033[0m] [\033[91mFAILED\033[0m]"
-                    exit()
-                print "[\033[95mTASK\033[0m] [\033[92mDONE\033[0m]"
+                except Exception as e:
+                    title_print(task_title, state='failed')
+                    raise e
 
-                print ""
+                title_print(task_title, state='succeeded')
 
         elif is_github_repo:
-            print "[\033[95mTASK\033[0m] Adding the SSH key to Github..."
+            task_title = 'Adding the SSH key to Github'
+
+            title_print(task_title, state='task')
 
             try:
                 response = requests.post('https://api.github.com/repos/{}/{}/keys'.format(github_account, github_repo), json={
@@ -513,10 +511,13 @@ class Command(ServerManagementBaseCommand):
                     'Authorization': 'token {}'.format(github_token)
                 })
 
-                print response.text
+                if options['debug']:
+                    print response.text
             except Exception as e:
-                print e.errors
-                print "[\033[95mTASK\033[0m] [\033[91mFAILED\033[0m]"
+                title_print(task_title, state='failed')
+                raise e
+
+            title_print(task_title, state='succeeded')
 
         # Define git tasks
         if is_bitbucket_repo:
@@ -532,46 +533,44 @@ class Command(ServerManagementBaseCommand):
 
         git_tasks = [
             {
+                'title': 'Add Github key to known hosts',
+                'command': 'ssh-keyscan -H github.com >> ~{project}/.ssh/known_hosts'.format(
+                    project=project_folder,
+                ),
+            },
+            {
                 'title': "Setup the Git repo",
-                'ansible_arguments': {
-                    'module_name': 'git',
-                    'module_args': 'repo={} dest={} version=develop accept_hostkey=yes ssh_opts="-o StrictHostKeyChecking=no"'.format(
-                        git_url,
-                        "/var/www/{}".format(
-                            project_folder,
-                        )
-                    ),
-                    'sudo_user': 'deploy'
-                }
+                'command': 'cd /tmp; git clone {url} {project}'.format(
+                    url=git_url,
+                    project='/var/www/{}'.format(
+                        project_folder,
+                    )
+                ),
             },
         ]
-        run_tasks(env, git_tasks)
+        run_tasks(env, git_tasks, user=project_folder)
 
         # Define static tasks
         static_tasks = [
             {
                 'title': "Make the static directory",
-                'ansible_arguments': {
-                    'module_name': 'file',
-                    'module_args': 'path={} state=directory owner={} group=webapps mode=0775 recurse=yes'.format(
-                        "/var/www/{}_static/".format(
-                            project_folder
-                        ),
-                        project_folder,
-                    )
-                }
+                'command': '; '.join([
+                    'mkdir -m 0775 -p {dir}',
+                    'chown {project}:webapps {dir}',
+                ]).format(
+                    project=project_folder,
+                    dir=django_settings.STATIC_ROOT,
+                ),
             },
             {
                 'title': "Make the media directory",
-                'ansible_arguments': {
-                    'module_name': 'file',
-                    'module_args': 'path={} state=directory owner={} group=webapps mode=0775 recurse=yes'.format(
-                        "/var/www/{}_media/".format(
-                            project_folder
-                        ),
-                        project_folder,
-                    )
-                }
+                'command': '; '.join([
+                    'mkdir -m 0775 -p {dir}',
+                    'chown {project}:webapps {dir}'
+                ]).format(
+                    project=project_folder,
+                    dir=django_settings.MEDIA_ROOT,
+                ),
             },
         ]
         run_tasks(env, static_tasks)
@@ -586,144 +585,71 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': "Create the Gunicorn script file",
-                'ansible_arguments': {
-                    'module_name': 'copy',
-                    'module_args': 'src={file} dest=/var/www/{project}/gunicorn_start owner={project} group=webapps mode=0755 backup=yes'.format(
-                        file=session_files['gunicorn_start'].name,
-                        project=project_folder,
-                    )
-                }
+                'fabric_command': 'put',
+                'fabric_args': [session_files['gunicorn_start'].name, '/var/www/{project}/gunicorn_start'.format(
+                    project=project_folder,
+                )],
             },
             {
-                'title': "Create the application log folder",
-                'ansible_arguments': {
-                    'module_name': 'file',
-                    'module_args': 'path=/var/log owner={} group=webapps mode=0774 state=directory'.format(
-                        project_folder,
-                    )
-                }
-            },
-            {
-                'title': "Create the application log file",
-                'command': 'touch /var/log/gunicorn_supervisor.log',
-            },
-            {
-                'title': "Set permission to the application log file",
-                'ansible_arguments': {
-                    'module_name': 'file',
-                    'module_args': 'path=/var/log/gunicorn_supervisor.log owner={} group=webapps mode=0664 state=file'.format(
-                        project_folder,
-                    )
-                }
-            },
-        ]
-        run_tasks(env, venv_tasks)
-
-        # Check to see if we have a requirements file
-        print "[\033[95mTASK\033[0m] Looking for a requirements.txt file..."
-        requirements_check = ansible_task(
-            env,
-            module_name='stat',
-            module_args='path=/var/www/{}/requirements.txt'.format(
-                project_folder,
-            )
-        )
-        check_request(requirements_check, env, "TASK")
-
-        print ""
-
-        # Define requirement tasks
-        requirement_tasks = []
-
-        # Check to see if the requirements file exists
-        if requirements_check['contacted'][env.host_string]['stat']['exists']:
-            requirement_tasks.append(
-                {
-                    'title': "Install packages required by the Django app inside virtualenv",
-                    'ansible_arguments': {
-                        'module_name': 'pip',
-                        'module_args': 'virtualenv=/var/www/{project}/.venv requirements=/var/www/{project}/requirements.txt'.format(
-                            project=project_folder,
-                        )
-                    }
-                }
-            )
-
-        # Add the regular tasks
-        requirement_tasks = requirement_tasks + [
-            {
-                'title': "Make sure Gunicorn is installed",
-                'ansible_arguments': {
-                    'module_name': 'pip',
-                    'module_args': 'virtualenv=/var/www/{project}/.venv name=gunicorn'.format(
-                        project=project_folder,
-                    )
-                }
-            },
-            {
-                'title': "Update media permissions",
-                'ansible_arguments': {
-                    'module_name': 'file',
-                    'module_args': 'path=/var/www/{project}_media/ owner={project} group=webapps recurse=yes'.format(
-                        project=project_folder,
-                    )
-                }
-            },
-        ]
-
-        run_tasks(env, requirement_tasks)
-
-        # Define permission tasks
-        permission_tasks = [
-            {
-                'title': "Ensure that the application file permissions are set properly",
-                'ansible_arguments': {
-                    'module_name': 'file',
-                    'module_args': 'path=/var/www/{project}/.venv recurse=yes owner={project} group=webapps state=directory'.format(
-                        project=project_folder,
-                    )
-                }
+                'title': 'Make the Gunicorn script file executable',
+                'command': 'chmod +x /var/www/{project}/gunicorn_start'.format(
+                    project=project_folder,
+                )
             }
         ]
-        run_tasks(env, permission_tasks)
+        run_tasks(env, venv_tasks, user=project_folder)
+
+        log_tasks = [
+            {
+                'title': "Create the application log file",
+                'command': '; '.join([
+                    'touch /var/log/gunicorn_supervisor.log',
+                    'chown {}:webapps /var/log/gunicorn_supervisor.log'.format(
+                        project_folder,
+                    ),
+                    'chmod 0644 /var/log/gunicorn_supervisor.log',
+                ]),
+            },
+        ]
+        run_tasks(env, log_tasks)
+
+        requirement_tasks = [
+            {
+                # Check to see if we have a requirements file. Even though we check for
+                # it at the start of the deployment process, it hasn't necessarily been
+                # committed. So this check covers that.
+
+                'title': "Install packages required by the Django app inside virtualenv",
+                'command': 'if [ -f /var/www/{project}/requirements.txt ]; then /var/www/{project}/.venv/bin/pip install -r /var/www/{project}/requirements.txt; fi'.format(
+                    project=project_folder,
+                ),
+            },
+            {
+                'title': "Make sure Gunicorn is installed",
+                'command': '/var/www/{project}/.venv/bin/pip install gunicorn'.format(
+                    project=project_folder,
+                ),
+            },
+        ]
+
+        run_tasks(env, requirement_tasks, user=project_folder)
 
         # Define nginx tasks
         nginx_tasks = [
             {
-                'title': "Install Nginx and Certbot",
-                'ansible_arguments': {
-                    'module_name': 'apt',
-                    'module_args': 'name={item} force=yes state=present'
-                },
-                'with_items': [
-                    'nginx',
-                    'certbot',
-                    'python-certbot-nginx',
-                ],
-            },
-            {
                 'title': "Ensure Nginx service is stopped",  # This allows Certbot to run.
-                'ansible_arguments': {
-                    'module_name': 'service',
-                    'module_args': 'name=nginx state=stopped enabled=yes'
-                }
+                'command': 'service nginx stop',
             },
             {
                 'title': "Create the Nginx configuration file",
-                'ansible_arguments': {
-                    'module_name': 'copy',
-                    'module_args': 'src={} dest=/etc/nginx/sites-available/{} backup=yes'.format(
-                        session_files['nginx_site_config'].name,
-                        project_folder,
-                    )
-                }
+                'fabric_command': 'put',
+                'fabric_args': [session_files['nginx_site_config'].name, '/etc/nginx/sites-available/{}'.format(
+                    project_folder,
+                )],
             },
             {
                 'title': 'Create the .htpasswd file',
-                'ansible_arguments': {
-                    'module_name': 'htpasswd',
-                    'module_args': ' path=/etc/nginx/htpasswd name=onespace password=media owner=root group=root mode=0644'
-                }
+                'command': 'htpasswd -c -b /etc/nginx/htpasswd onespace media',
             },
             {
                 'title': "Ensure that the default site is disabled",
@@ -748,10 +674,7 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': "Ensure Nginx service is started",
-                'ansible_arguments': {
-                    'module_name': 'service',
-                    'module_args': 'name=nginx state=started enabled=yes'
-                }
+                'command': 'service nginx start',
             },
         ]
         run_tasks(env, nginx_tasks)
@@ -778,29 +701,22 @@ class Command(ServerManagementBaseCommand):
         supervisor_tasks = [
             {
                 'title': "Create the Supervisor config file for the application",
-                'ansible_arguments': {
-                    'module_name': 'copy',
-                    'module_args': 'src={} dest=/etc/supervisor/conf.d/{}.conf backup=yes'.format(
-                        session_files['supervisor_config'].name,
-                        project_folder,
-                    )
-                }
+                'fabric_command': 'put',
+                'fabric_args': [session_files['supervisor_config'].name, '/etc/supervisor/conf.d/{}.conf'.format(
+                    project_folder,
+                )],
             },
             {
                 'title': "Stopping memcached and removing from startup runlevels",
-                'ansible_arguments': {
-                    'module_name': 'service',
-                    'module_args': 'name=memcached state=stopped enabled=no'
-                }
+                'command': '; '.join([
+                    'service memcached stop',
+                    'systemctl disable memcached',
+                ]),
             },
             {
                 'title': "Create the Supervisor config file for memcached",
-                'ansible_arguments': {
-                    'module_name': 'copy',
-                    'module_args': 'src={} dest=/etc/supervisor/conf.d/memcached.conf backup=yes'.format(
-                        session_files['memcached_supervisor_config'].name,
-                    )
-                }
+                'fabric_command': 'put',
+                'fabric_args': [session_files['memcached_supervisor_config'].name, '/etc/supervisor/conf.d/memcached.conf'],
             },
             {
                 'title': "Re-read the Supervisor config files",
@@ -819,73 +735,38 @@ class Command(ServerManagementBaseCommand):
             "npm": [
                 {
                     'title': 'Install nvm',
-                    'ansible_arguments': {
-                        'module_name': 'shell',
-                        'module_args': 'sudo -H -u {project} bash -c "curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.32.1/install.sh | bash" executable=/bin/bash'.format(
-                            project=project_folder,
-                        )
-                    }
+                    'command': 'cd /tmp; curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.32.1/install.sh | bash',
                 },
                 {
                     'title': 'Activate nvm then install node and yarn',
-                    'ansible_arguments': {
-                        'module_name': 'shell',
-                        'module_args': 'sudo -H -u {project} bash -c ". ~/.nvm/nvm.sh && nvm install && npm install -g yarn" chdir=/var/www/{project} executable=/bin/bash'.format(
-                            project=project_folder,
-                        )
-                    }
-                },
-                {
-                    'title': 'Fix some permissions',
-                    'ansible_arguments': {
-                        'module_name': 'shell',
-                        'module_args': 'chown {project}:webapps -R /var/www/*; chmod -R g+w /var/www/{project}*; chmod ug+rwX -R /var/www/{project}/.git executable=/bin/bash'.format(
-                            project=project_folder,
-                        )
-                    }
-                },
-                {
-                    'title': 'Install node packages',
-                    'ansible_arguments': {
-                        'module_name': 'shell',
-                        'module_args': 'sudo -H -u {project} bash -c ". ~/.nvm/nvm.sh && yarn" chdir=/var/www/{project} executable=/bin/bash'.format(
-                            project=project_folder,
-                        )
-                    }
-                },
-                {
-                    'title': 'Initiate build',
-                    'ansible_arguments': {
-                        'module_name': 'shell',
-                        'module_args': 'sudo -H -u {project} bash -c ". ~/.nvm/nvm.sh && cd /var/www/{project} && yarn run build" executable=/bin/bash'.format(
-                            project=project_folder,
-                        )
-                    }
+                    'command': '&& '.join([
+                        'cd /var/www/{project}',
+                        '. ~{project}/.nvm/nvm.sh',
+                        'nvm install',
+                        'npm install -g yarn',
+                        'yarn',
+                        'yarn run build',
+                    ]).format(
+                        project=project_folder,
+                    ),
                 },
                 {
                     'title': 'Ensure static folder exists in project',
-                    'ansible_arguments': {
-                        'module_name': 'file',
-                        'module_args': 'state=directory owner={project} group=webapps path=/var/www/{project}/{project}/static/'.format(
-                            project=project_folder,
-                        )
-                    }
+                    'command': 'if [ ! -d "/var/www/{project}/{project}/static/" ]; then mkdir /var/www/{project}/{project}/static/; fi'.format(
+                        project=project_folder,
+                    ),
                 },
                 {
                     'title': "Collect static files",
-                    'ansible_arguments': {
-                        'module_name': 'django_manage',
-                        'module_args': 'command=collectstatic app_path=/var/www/{project} virtualenv=/var/www/{project}/.venv settings={project}.settings.{settings}'.format(
-                            project=project_folder,
-                            settings=remote['server'].get('settings_file', 'production'),
-                        )
-                    }
+                    'command': '/var/www/{project}/.venv/bin/python /var/www/{project}/manage.py collectstatic --noinput --link --settings={project}.settings.{settings}'.format(
+                        project=project_folder,
+                        settings=remote['server'].get('settings_file', 'production'),
+                    ),
                 }
             ]
-
         }
 
-        run_tasks(env, build_systems[remote['server'].get('build_system', 'none')])
+        run_tasks(env, build_systems[remote['server'].get('build_system', 'none')], user=project_folder)
 
         # Delete files
         for session_file in session_files:

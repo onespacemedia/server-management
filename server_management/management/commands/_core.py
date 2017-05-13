@@ -3,7 +3,7 @@ from optparse import make_option
 from django.conf import settings
 from django.core.management.base import BaseCommand
 import fabric
-from fabric.api import hide, prompt, run, settings as fabric_settings, fastprint
+from fabric.api import hide, prompt, run, settings as fabric_settings, fastprint, sudo
 from fabric.contrib.console import confirm
 from fabric.colors import green, yellow, red
 import json
@@ -22,6 +22,13 @@ class ServerManagementBaseCommand(BaseCommand):
         make_option(
             '--debug',
             dest='debug',
+            action='store_true',
+            default=False,
+        ),
+
+        make_option(
+            '--noinput',
+            dest='noinput',
             action='store_true',
             default=False,
         ),
@@ -114,29 +121,43 @@ def load_config(env, remote=None, config_user='deploy', debug=False):
     return config, remote
 
 
-def check_request(task, result):
-    if result.succeeded:
-        fastprint('\r[{}] {} ... done'.format(
-            green('TASK'),
-            task['title'],
-        ), end='\n')
-    elif result.failed:
-        fastprint('\r[{}] {} ... failed'.format(
-            red('TASK'),
-            task['title'],
-        ), end='\n')
-
-def run_tasks(env, tasks):
-    # Loop tasks
-    for task in tasks:
+def title_print(title, state=''):
+    if state == 'task':
         fastprint('[{}] {} ... '.format(
             yellow('TASK'),
-            task['title'],
+            title,
         ))
+    elif state == 'succeeded':
+        fastprint('\r[{}] {} ... done'.format(
+            green('TASK'),
+            title,
+        ), end='\n')
+    elif state == 'failed':
+        fastprint('\r[{}] {} ... failed'.format(
+            red('TASK'),
+            title,
+        ), end='\n')
+
+        exit()
+
+
+def check_request(task, result):
+    if result.succeeded:
+        title_print(task['title'], state='succeeded')
+    elif result.failed:
+        title_print(task['title'], state='failed')
+
+def run_tasks(env, tasks, user=None):
+    # Loop tasks
+    for task in tasks:
+        title_print(task['title'], state='task')
 
         # Generic command
         if 'command' in task:
-            task_result = run(task['command'])
+            if user:
+                task_result = sudo(task['command'], user=user)
+            else:
+                task_result = run(task['command'])
         # Fabric API
         elif 'fabric_command' in task:
             task_result = getattr(fabric.api, task['fabric_command'])(*task.get('fabric_args', []), **task.get('fabric_kwargs', {}))
