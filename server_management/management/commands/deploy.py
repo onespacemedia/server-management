@@ -141,6 +141,7 @@ class Command(ServerManagementBaseCommand):
             'memcached_supervisor_config': NamedTemporaryFile(delete=False),
             'nginx_site_config': NamedTemporaryFile(delete=False),
             'apt_periodic': NamedTemporaryFile(delete=False),
+            'certbot_cronjob': NamedTemporaryFile(delete=False),
         }
 
         # Parse files
@@ -169,6 +170,9 @@ class Command(ServerManagementBaseCommand):
 
         session_files['apt_periodic'].write(render_to_string('apt_periodic'))
         session_files['apt_periodic'].close()
+
+        session_files['certbot_cronjob'].write(render_to_string('certbot_cronjob'))
+        session_files['certbot_cronjob'].close()
 
         # Define the locales first.
         locale_tasks = [
@@ -675,6 +679,15 @@ class Command(ServerManagementBaseCommand):
             {
                 'title': "Ensure Nginx service is started",
                 'command': 'service nginx start',
+            },
+            {
+                'title': 'Configure certbot cronjob',
+                'fabric_command': 'put',
+                'fabric_args': [session_files['certbot_cronjob'].name, '/etc/cron.d/certbot'],
+            },
+            {
+                'title': "Ensure the certbot cronjob has the correct file permissions",
+                'command': 'chmod 0644 /etc/cron.d/certbot',
             },
         ]
         run_tasks(env, nginx_tasks)
