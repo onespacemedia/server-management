@@ -1,12 +1,10 @@
 # onespacemedia-server-management
 
-``onespacemedia-server-management`` allows for very simple deployment and day-to-day management of Django projects.  Primarily used and maintained by the team at [Onespacemedia](http://www.onespacemedia.com/), but should work for most people.  It allows you to deploy a Django application, preferably onto a Ubuntu or Debian server, and maintain the application over time.
+``onespacemedia-server-management`` allows for very simple deployment and day-to-day management of Django projects.  Primarily used and maintained by the team at [Onespacemedia](http://www.onespacemedia.com/), but should work for most people.  It allows you to deploy a Django application, preferably onto a Ubuntu 16.04 or Debian Jessie server, and maintain the application over time.
 
-The commands are all wrappers around [Ansible's](/ansible/ansible) [Python API](http://docs.ansible.com/developing_api.html) with the tasks themselves ported over from real cookbooks. The calls are made using a combination of Fabric and custom code.
+### Features:
 
-### Features:
-
-* Deployment, using Ansible and Fabric.
+* Deploying to a fresh server.
 * Pushing your local database to the remote server.
 * Pushing your local media files to the remote server.
 * Pulling the database from the remote server to your local machine.
@@ -15,13 +13,13 @@ The commands are all wrappers around [Ansible's](/ansible/ansible) [Python API](
 
 ### Notes / Assumptions:
 
-* This project currently makes the assumption that your code is hosted on BitBucket.  However, the code can be very easily updated to support generic Git hosts, pull requests are welcomed for this.
+* This project currently makes the assumption that your code is hosted on either Github or Bitbucket.  However, the code can be very easily updated to support generic Git hosts, pull requests are welcomed for this.
 * The code takes database credentials from a file on disk, so projects using configuration data stored in environment variables are not currently supported.
 * The application stack consists of Nginx, Supervisor, Gunicorn, Memcached and PostgreSQL.
-* The deployment process will deploy all services onto one machine, it does not support splitting services across multiple machines, though as we're using Ansible it could be possible in the future.
+* The deployment process will deploy all services onto one machine, it does not support splitting services across multiple machines.
 * Your project is expected to use a virtual environment, with the folder in the same directory as the ``manage.py`` file, and be named ``venv`` or ``.venv``.
 * The deploy script currently logs in as root and installs the base packages as root. It then creates a deploy user and disable root access. The application, PostgreSQL server and Supervisor all run under their own users.
-* The deployment script does not currently support uploading HTTPS / SSL certificates or automatically configurating nginx to handle HTTPS traffic.
+* The deployment script requires you to have HTTPS-only traffic.  It uses Let's Encrypt to request certificates and nginx is configured to use HTTP/2 by default.
 * Specific static and media paths are required, they are documented below.
 
 ## Installation
@@ -39,45 +37,12 @@ We need to add ``onespacemedia-server-management`` to our project, so add ``serv
         'server_management',
     ]
 
-Next, you need to create a ``server.json`` file which contains the information about your remote server and your database. This will live in the project folder above ``manage.py``, you can print the exact location with ``settings.SITE_ROOT``. Some example files are below:
+Next, you need to create a ``server.json`` file which contains the information about your remote server and your database. This will live in the project folder above ``manage.py``, you can print the exact location with ``settings.SITE_ROOT``. Ah example file is below:
 
-### Single host
-
-    {
-        "local": {
-            "database": {
-                "name": "example_dev"
-            }
-        },
-        "remote": {
-            "server": {
-                "build_system": "npm",
-                "ip": "12.34.45.78"
-                "deploy_user": "deploy",
-            },
-            "database": {
-                "name": "example_prod",
-                "user": "example_prod_user",
-                "password": ""
-            },
-            "is_aws": false,
-        },
-        "slack": {
-            "enabled": true,
-            "endpoints": [
-                {
-                    "url": "https://hooks.slack.com/services/endpoint",
-                    "channel": "#deployments",
-                    "name": "Update Bot",
-                    "emoji": ":computer:"
-                }
-            ]
-        }
-    }
 
 ### Multiple hosts (including AWS)
 
-Please note that the `remote` key changes to `remotes`.
+If you only wanted to deploy to one host, you would simply need to remove one of the values from the "remotes" dictionary.
 
     {
         "local": {
@@ -140,44 +105,23 @@ The deploy script is the most complex command in the library, but saves many man
 #### On your machine
 * Check if a connection can be made to the remove server using the username ``root`` and the IP specified in the ``server.json``.
 * Parses the username and repo name from the current git remote.
-* Requests a valid Bitbucket username and password.
+* Requests a valid Github token or Bitbucket username and password.
 * Renders template files for PostgreSQL, Gunicorn and Nginx.
 
-#### On the remote server
+#### On the remote server
 * Base actions:
 	* Update the apt-cache.
 	* Enables unattended-upgrades
-	* Installs a set of base packages via apt-get:
-	    * ``build-essential``
-	    * ``git``
-	    * ``python-dev``
-	    * ``python-pip``
-	    * ``supervisor``
-	    * ``libjpeg-dev``
-	    * ``libffi-dev``
-	    * ``npm``
-	    * ``memcached``
-	    * ``libgeoip-dev``
-	* Installs ``bower`` with ``npm``.
-	* Installs ``gulp`` with ``npm``.
-	* Installs ``virtualenv`` with pip.
-* PostgreSQL actions:
-	* Installs PostgreSQL with the following packages:
-	    * ``postgresql-9.3``
-	    * ``postgresql-contrib-9.3``
-	    * ``libpq-dev``
-	    * ``python-psycopg2``
-	    * ``pgtune``
+	* Installs a set of base packages via apt.
+	* Installs PostgreSQL.
 	* Starts PostgreSQL.
-	* Optimises the PostgreSQL config using ``pgtune``.
-	* Creates the application database, using the settings provided in the ``server.json``
 	* Creates the database user.
 	* Adds the database user to the database.
 	* Ensures the database user doesn't have unnecessary privileges.
 * Application tasks:
 	* Creates a group (named ``webapps``) for the application user.
 	* Creates a user (with the name being your application name) and adds it to the ``webapps`` group.
-	* Adds the server's public SSH key to the Bitbucket repository, if it's not there already.
+	* Adds the server's public SSH key to the Github / Bitbucket repository, if it's not there already.
 	* Checks out the Git repository to ``/var/www/<application name>``
 	* Creates the static directory at ``/var/www/<application name>_static``
 	* Creates the media directory at ``/var/www/<application name>_media``
@@ -205,7 +149,7 @@ The deploy script is the most complex command in the library, but saves many man
 	* Uploads the local media files to the remote server.
 
 
-### PullDB
+### pulldb
 * Dumps the database on the remote server to an SQL file.
 * Pulls the database file down the the local machine (using ``scp``).
 * Removes the file from the remote server.
@@ -214,21 +158,21 @@ The deploy script is the most complex command in the library, but saves many man
 * Imports the downloaded SQL file into the local database.
 * Removes the downloaded file.
 
-### PullMedia
+### pullmedia
 * Ensures the media folder exists on the local machine, creating it if necessary.
 * Pulls down the remote uploads folder (using ``rsync``).
 
-### PushDB
+### pushdb
 * Dumps the database on the local machine to an SQL file.
 * Uploads the database to the remote server.
 * Imports the SQL file into the remote database.
 * Removes the SQL file from the remote server.
 * Removes the SQL file from the local machine.
 
-### PushMedia
+### pushmedia
 * Pushes up the local uploads folder to the remote server (using ``rsync``)
 
-### Update
+### update
 * Ensures the file permissions are correct on the remote server.
 * Runs a ``git pull`` in the virtual environment.
 * Installs the requirements from the ``requirements.txt``.
