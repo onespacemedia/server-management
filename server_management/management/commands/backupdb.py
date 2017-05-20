@@ -1,8 +1,7 @@
 from django.utils.timezone import now
+from fabric.api import env, local, settings, sudo
 
-from _core import load_config, ServerManagementBaseCommand
-
-from fabric.api import *
+from ._core import load_config, ServerManagementBaseCommand
 
 
 class Command(ServerManagementBaseCommand):

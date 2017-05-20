@@ -1,14 +1,13 @@
-from django.conf import settings as django_settings
-from fabric.api import *
-from fabvenv import virtualenv
-
-from _core import load_config, ServerManagementBaseCommand
-
 import datetime
 import json
-import requests
 import os
 import sys
+import requests
+from django.conf import settings as django_settings
+from fabric.api import sudo, run, hide, lcd, settings, shell_env, cd, local, env
+from fabvenv import virtualenv
+
+from ._core import load_config, ServerManagementBaseCommand
 
 
 class Command(ServerManagementBaseCommand):

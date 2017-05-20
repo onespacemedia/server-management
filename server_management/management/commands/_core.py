@@ -1,13 +1,13 @@
 from optparse import make_option
 
+import json
+import sys
 from django.conf import settings
 from django.core.management.base import BaseCommand
 import fabric
 from fabric.api import hide, prompt, run, settings as fabric_settings, fastprint, sudo
 from fabric.contrib.console import confirm
 from fabric.colors import green, yellow, red
-import json
-import sys
 
 
 class ServerManagementBaseCommand(BaseCommand):
@@ -147,6 +147,7 @@ def check_request(task, result):
     elif result.failed:
         title_print(task['title'], state='failed')
 
+
 def run_tasks(env, tasks, user=None):
     # Loop tasks
     for task in tasks:
@@ -162,31 +163,5 @@ def run_tasks(env, tasks, user=None):
         elif 'fabric_command' in task:
             task_result = getattr(fabric.api, task['fabric_command'])(*task.get('fabric_args', []), **task.get('fabric_kwargs', {}))
 
-        if not task.get('with_items'):
-
-            # Run task with arguments
-
-            # Check result
-            check_request(task, task_result)
-
-        else:
-            print "[\033[95mTASK\033[0m] {}...".format(task['title'])
-
-            # Store task args pattern
-            module_args_pattern = task['ansible_arguments']['module_args']
-
-            for item in task.get('with_items'):
-                print "[\033[94mITEM\033[0m] {}".format(item)
-
-                # Format args with item
-                task['ansible_arguments']['module_args'] = module_args_pattern.format(
-                    item=item
-                )
-
-                # Run task with arguments
-                task_result = ansible_task(env, **task['ansible_arguments'])
-
-                # Check result
-                check_request(task_result, env, "ITEM", color='\033[94m')
-
-            print "[\033[95mTASK\033[0m] [\033[92mDONE\033[0m]"
+        # Check result
+        check_request(task, task_result)

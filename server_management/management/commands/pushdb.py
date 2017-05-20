@@ -1,8 +1,7 @@
-from _core import load_config, ServerManagementBaseCommand, run_tasks
-
-from fabric.api import *
-
 import os
+from fabric.api import env, local, run, settings, sudo
+
+from ._core import load_config, ServerManagementBaseCommand, run_tasks
 
 
 class Command(ServerManagementBaseCommand):

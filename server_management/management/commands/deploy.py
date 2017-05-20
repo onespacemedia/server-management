@@ -6,12 +6,10 @@ from urllib import urlencode
 from django.conf import settings as django_settings
 from django.core.files.temp import NamedTemporaryFile
 from django.template.loader import render_to_string
-from fabric.api import abort, env, fastprint, hide, local, lcd, prompt, run, settings
-from fabric.colors import green, yellow, red
-from fabric.contrib.console import confirm
+from fabric.api import abort, env, hide, local, lcd, prompt, run, settings
 import requests
 
-from ._core import load_config, run_tasks, check_request, ServerManagementBaseCommand, title_print
+from ._core import load_config, run_tasks, ServerManagementBaseCommand, title_print
 
 
 class Command(ServerManagementBaseCommand):
@@ -60,8 +58,7 @@ class Command(ServerManagementBaseCommand):
                         bitbucket_account = bb_regex.group(1)
                         bitbucket_repo = bb_regex.group(2)
                     else:
-                        print 'Unable to determine Bitbucket details.'
-                        exit()
+                        raise Exception('Unable to determine Bitbucket details.')
 
                 elif is_github_repo:
                     gh_regex = re.match(r'(?:git@|https:\/\/)github.com[:/]([\w-]+)/([\w-]+)\.git$', git_remote)
@@ -89,6 +86,9 @@ class Command(ServerManagementBaseCommand):
         if not options['noinput']:
             fallback_domain_name = prompt("What should the default domain be?", default=fallback_domain_name)
             domain_names = prompt('Which domains would you like to enable in nginx?', default=domain_names)
+        else:
+            print 'Default domain: ', fallback_domain_name
+            print 'Domains to be enabled in nginx: ', domain_names
 
         # If the domain is pointing to the droplet already, we can setup SSL.
         setup_ssl_for = [
@@ -355,7 +355,7 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': 'Generate SSH keys for application user',
-                'command': "ssh-keygen -C test -f ~{}/.ssh/id_rsa -N ''".format(
+                'command': "ssh-keygen -C application-server -f ~{}/.ssh/id_rsa -N ''".format(
                     project_folder,
                 )
             },
@@ -390,7 +390,9 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': "Add authorized keys to deploy user",
-                'command': 'mv /root/.ssh/authorized_keys /home/deploy/.ssh/authorized_keys',  # TODO: Integrate the initial_user fix.
+                'command': 'mv ~{}/.ssh/authorized_keys /home/deploy/.ssh/authorized_keys'.format(
+                    env.user,
+                ),
             },
             {
                 'title': 'Check deploy user file permissions',
