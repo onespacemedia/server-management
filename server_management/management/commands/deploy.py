@@ -132,6 +132,8 @@ class Command(ServerManagementBaseCommand):
             else:
                 github_token = prompt("Please enter your Github token (obtained from https://github.com/settings/tokens):")
 
+        circle_token = os.environ.get('CIRCLE_TOKEN', None)
+
         print ""
 
         # Create session_files
@@ -784,5 +786,43 @@ class Command(ServerManagementBaseCommand):
         # Delete files
         for session_file in session_files:
             os.unlink(session_files[session_file].name)
+
+        # Add the project to CircleCI
+        circle_tasks = [
+            {
+                'title': "Create the CircleCI SSH key",
+                'fabric_command': 'local',
+                'fabric_args': ['mkdir dist; ssh-keygen -C circleci -f dist/id_rsa -N '''],
+            },
+            {
+                'title': 'Follow the project on CircleCI',
+                'fabric_command': 'local',
+                'fabric_args': ['curl -X POST https://circleci.com/api/v1.1/project/github/{github_account}/{github_repo}/follow?circle-token={circle_token}'.format(
+                    github_account=github_account,
+                    github_repo=github_repo,
+                    circle_token=circle_token,
+                )]
+            },
+            {
+                'title': 'Add private SSH key to CircleCI',
+                'fabric_command': 'local',
+                'fabric_args': ['curl -X POST --header "Content-Type: application/json" -d \'{{"hostname":"{fallback_domain_name}","private_key":"{private_key}"}}\' https://circleci.com/api/v1.1/project/github/{github_account}/{github_repo}/ssh-key?circle-token={circle_token}'.format(
+                    fallback_domain_name=fallback_domain_name,
+                    private_key=open('dist/id_rsa', 'r').read(),
+                    github_account=github_account,
+                    github_repo=github_repo,
+                    circle_token=circle_token,
+                )]
+            },
+            {
+                'title': 'Add public key to server',
+                'command': 'echo "{}" >> ~deploy/.ssh/authorized_keys'.format(
+                    open('dist/id_rsa.pub', 'r').read()
+                )
+            },
+        ]
+
+        if circle_token and is_github_repo:
+            run_tasks(env, circle_tasks)
 
         print "Initial application deployment has completed. You should now pushdb and pushmedia."
