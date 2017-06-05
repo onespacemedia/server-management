@@ -102,7 +102,7 @@ Once ``onespacemedia-server-management`` has been added to your project you will
 
 The deploy script is the most complex command in the library, but saves many man-hours upon use.  The steps it takes are as follows:
 
-#### On your machine
+#### On your machine
 * Check if a connection can be made to the remove server using the username ``root`` and the IP specified in the ``server.json``.
 * Parses the username and repo name from the current git remote.
 * Requests a valid Github token or Bitbucket username and password.
