@@ -29,10 +29,7 @@ class Command(ServerManagementBaseCommand):
 
             # Define db tasks
             db_tasks = [
-                {
-                    'title': "Stop Supervisor tasks",
-                    'command': 'sudo supervisorctl stop all',
-                },
+                dict(title='Stop Supervisor tasks', command='sudo supervisorctl stop all'),
                 {
                     'title': 'Drop database',
                     'command': 'sudo su - postgres -c "dropdb -w {name}"'.format(
@@ -40,28 +37,28 @@ class Command(ServerManagementBaseCommand):
                     ),
                 },
                 {
-                    'title': "Ensure database is created",
+                    'title': 'Ensure database is created',
                     'command': 'sudo su - postgres -c "createdb {name} --encoding=UTF-8 --locale=en_GB.UTF-8 --template=template0 --owner={owner} --no-password"'.format(
                         name=remote['database']['name'],
                         owner=remote['database']['user'],
                     ),
                 },
                 {
-                    'title': "Ensure user has access to the database",
+                    'title': 'Ensure user has access to the database',
                     'command': 'sudo su - postgres -c "psql {name} -c \'GRANT ALL ON DATABASE {name} TO {owner}\'"'.format(
                         name=remote['database']['name'],
                         owner=remote['database']['user'],
                     ),
                 },
                 {
-                    'title': "Ensure user does not have unnecessary privileges",
+                    'title': 'Ensure user does not have unnecessary privileges',
                     'command': 'sudo su - postgres -c "psql {name} -c \'ALTER USER {owner} WITH NOSUPERUSER NOCREATEDB\'"'.format(
                         name=remote['database']['name'],
                         owner=remote['database']['user'],
                     ),
                 },
                 {
-                    'title': "Start Supervisor tasks",
+                    'title': 'Start Supervisor tasks',
                     'command': 'sudo supervisorctl start all',
                 },
             ]

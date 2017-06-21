@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 from optparse import make_option
 
 import json
@@ -11,28 +13,30 @@ from fabric.colors import green, yellow, red
 
 
 class ServerManagementBaseCommand(BaseCommand):
-    option_list = BaseCommand.option_list + (
-        make_option(
+
+    def add_arguments(self, parser):
+        super(ServerManagementBaseCommand, self).add_arguments(parser)
+
+        parser.add_argument(
             '--remote',
             dest='remote',
             default=None,
             help='remote host'
-        ),
+        )
 
-        make_option(
+        parser.add_argument(
             '--debug',
             dest='debug',
             action='store_true',
             default=False,
-        ),
+        )
 
-        make_option(
+        parser.add_argument(
             '--noinput',
             dest='noinput',
             action='store_true',
             default=False,
-        ),
-    )
+        )
 
 
 def load_config(env, remote=None, config_user='deploy', debug=False):
@@ -40,33 +44,32 @@ def load_config(env, remote=None, config_user='deploy', debug=False):
 
     # Load the json file
     try:
-        json_data = open("{}/server.json".format(
-            settings.SITE_ROOT
-        ))
-        config = json.load(json_data)
-    except:
-        raise Exception("Something is wrong with the server.json file, make sure it exists and is valid JSON.")
+        with open('{}/server.json'.format(settings.SITE_ROOT), 'r', encoding='utf-8') as json_data:
+            config = json.loads(json_data.read())
+    except Exception as e:
+        print(e)
+        raise Exception('Something is wrong with the server.json file, make sure it exists and is valid JSON.')
 
     # Define current host from settings in server config
     # First check if there is a single remote or multiple.
     if 'remotes' not in config or not config['remotes']:
-        raise Exception("No remotes specified in config.")
+        raise Exception('No remotes specified in config.')
 
     # Prompt for a host selection.
-    remote_keys = config['remotes'].keys()
+    remote_keys = list(config['remotes'].keys())
     if len(remote_keys) == 1:
         remote_prompt = remote_keys[0]
     elif remote:
         if remote_prompt not in remote_keys:
-            raise Exception("Invalid remote name `{}`.".format(remote))
+            raise Exception('Invalid remote name `{}`.'.format(remote))
 
         remote_prompt = remote
     else:
-        print "Available hosts: {}".format(
+        print('Available hosts: {}'.format(
             ', '.join(config['remotes'].keys())
-        )
+        ))
 
-        remote_prompt = prompt("Please enter a remote: ", default=remote_keys[0], validate=lambda x: x in remote_keys)
+        remote_prompt = prompt('Please enter a remote: ', default=remote_keys[0], validate=lambda x: x in remote_keys)
 
     remote = config['remotes'][remote_prompt]
     env.host_string = remote['server']['ip']
@@ -109,7 +112,7 @@ def load_config(env, remote=None, config_user='deploy', debug=False):
     with hide('output', 'running', 'warnings'):
         with fabric_settings(warn_only=True):
             if not run('whoami'):
-                print "Failed to connect to remote server"
+                print('Failed to connect to remote server')
                 exit()
 
     if not debug:

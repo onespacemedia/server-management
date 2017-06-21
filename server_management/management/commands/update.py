@@ -15,18 +15,18 @@ class Command(ServerManagementBaseCommand):
     slack_enabled = False
     slack_endpoints = []
 
-    current_commit = os.popen("git rev-parse --short HEAD").read().strip()
-    remote = os.popen("git config --get remote.origin.url").read().split(':')[1].split('.')[0]
+    current_commit = os.popen('git rev-parse --short HEAD').read().strip()
+    remote = os.popen('git config --get remote.origin.url').read().split(':')[1].split('.')[0]
     remote = 'production'
 
     def _bitbucket_commit_url(self, commit):
-        return "<https://bitbucket.org/{}/commits/{commit}|{commit}>".format(
+        return '<https://bitbucket.org/{}/commits/{commit}|{commit}>'.format(
             self.remote,
             commit=commit,
         )
 
     def _bitbucket_diff_url(self, commit1, commit2):
-        return "<https://bitbucket.org/{}/branches/compare/{}..{}#diff|diff>".format(
+        return '<https://bitbucket.org/{}/branches/compare/{}..{}#diff|diff>'.format(
             self.remote,
             commit2,
             commit1,
@@ -201,15 +201,15 @@ class Command(ServerManagementBaseCommand):
                 ), capture=True)
 
         with settings(sudo_user=project_folder), cd('/var/www/{}'.format(project_folder)):
-            self.server_commit = run("git rev-parse --short HEAD")
-            settings_module = "{}.settings.{}".format(
+            self.server_commit = run('git rev-parse --short HEAD')
+            settings_module = '{}.settings.{}'.format(
                 project_folder,
                 remote['server'].get('settings_file', 'production'),
             )
 
             # Check which venv we need to use.
             with settings(warn_only=True):
-                result = run("bash -c '[ -d venv ]'")
+                result = run('bash -c \'[ -d venv ]\'')
 
             if result.return_code == 0:
                 venv = '/var/www/{}/venv/'.format(project_folder)
@@ -229,7 +229,7 @@ class Command(ServerManagementBaseCommand):
 
                 # Check if we have PyPy
                 with settings(warn_only=True):
-                    result = run("test -x /usr/bin/pypy")
+                    result = run('test -x /usr/bin/pypy')
 
                 if result.return_code == 0:
                     sudo('virtualenv -p /usr/bin/pypy {}'.format(venv))

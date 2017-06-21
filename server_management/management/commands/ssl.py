@@ -28,7 +28,7 @@ class Command(ServerManagementBaseCommand):
         fallback_domain_name = django_settings.SITE_DOMAIN
 
         if not options['noinput']:
-            fallback_domain_name = prompt("What should the default domain be?", default=fallback_domain_name)
+            fallback_domain_name = prompt('What should the default domain be?', default=fallback_domain_name)
             domain_names = prompt('Which domains would you like to enable in nginx?', default=domain_names)
         else:
             print 'Default domain: ', fallback_domain_name
@@ -57,7 +57,7 @@ class Command(ServerManagementBaseCommand):
         # Define nginx tasks
         nginx_tasks = [
             {
-                'title': "Ensure Nginx service is stopped",  # This allows Certbot to run.
+                'title': 'Ensure Nginx service is stopped',  # This allows Certbot to run.
                 'command': 'service nginx stop',
             },
             {
@@ -68,7 +68,7 @@ class Command(ServerManagementBaseCommand):
                 ),
             },
             {
-                'title': "Ensure Nginx service is started",
+                'title': 'Ensure Nginx service is started',
                 'command': 'service nginx start',
             },
         ]
