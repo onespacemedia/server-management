@@ -218,7 +218,8 @@ class Command(ServerManagementBaseCommand):
 
             sudo('git config --global user.email "developers@onespacemedia.com"')
             sudo('git config --global user.name "Onespacemedia Developers"')
-            git_changes = sudo('git pull --autostash --rebase')
+            sudo('git config --global rebase.autoStash true')
+            git_changes = sudo('git pull --rebase')
 
             if 'is up to date.' in git_changes:
                 exit()
