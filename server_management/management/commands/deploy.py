@@ -15,7 +15,7 @@ from ._core import load_config, run_tasks, ServerManagementBaseCommand, title_pr
 
 
 class Command(ServerManagementBaseCommand):
-    def handle(self, noinput, debug, *args, remote='', **options):
+    def handle(self, noinput, debug, remote='', *args, **options):
         # Load server config from project
         config, remote = load_config(env, remote, config_user='root', debug=debug)
 
