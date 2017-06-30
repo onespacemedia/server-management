@@ -222,6 +222,7 @@ class Command(ServerManagementBaseCommand):
             git_changes = sudo('git pull --rebase')
 
             if 'is up to date.' in git_changes:
+                self.stdout.write('Server is up to date.')
                 exit()
 
             if 'requirements' in git_changes:
