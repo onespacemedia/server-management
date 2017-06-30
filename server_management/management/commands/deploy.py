@@ -604,6 +604,15 @@ class Command(ServerManagementBaseCommand):
                 'title': 'Create the virtualenv',
                 'command': virtualenv_command.format(project=project_folder)
             },
+            # This shouldn't be necessary (we think we upgraded pip earlier)
+            # but it is - you'll get complaints about bdist_wheel without
+            # this.
+            {
+                'title': 'Upgrade pip inside the virtualenv',
+                'command': '/var/www/{project}/.venv/bin/pip install --upgrade pip'.format(
+                    project=project_folder,
+                ),
+            },
         ]
         run_tasks(env, venv_tasks, user=project_folder)
 
