@@ -279,7 +279,7 @@ class Command(ServerManagementBaseCommand):
                     if watson:
                         sudo('./manage.py buildwatson')
 
-                    sudo('supervisorctl restart all')
+        sudo('supervisorctl restart all')
 
         # Register the release with Opbeat.
         if 'opbeat' in config and config['opbeat']['app_id'] and config['opbeat']['secret_token']:
