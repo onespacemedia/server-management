@@ -176,6 +176,16 @@ class Command(ServerManagementBaseCommand):
         self._notify_failed(str(value))
         sys.__excepthook__(exctype, value, traceback)
 
+    def add_arguments(self, parser):
+        super(Command, self).add_arguments(parser)
+        parser.add_argument(
+            '--force-update',
+            action='store_true',
+            dest='force_update',
+            default=False,
+            help='Force server to update, even if there are no changes detected.',
+        )
+
     def handle(self, *args, **options):
         # Load server config from project
         config, remote = load_config(env, options.get('remote', ''))
@@ -221,11 +231,11 @@ class Command(ServerManagementBaseCommand):
             sudo('git config --global rebase.autoStash true')
             git_changes = sudo('git pull --rebase')
 
-            if 'is up to date.' in git_changes:
+            if 'is up to date.' in git_changes and not options['force_update']:
                 self.stdout.write('Server is up to date.')
                 exit()
 
-            if 'requirements' in git_changes:
+            if ('requirements' in git_changes) or options['force_update']:
                 # Rebuild the virtualenv.
                 sudo('rm -rf {}'.format(venv))
 
