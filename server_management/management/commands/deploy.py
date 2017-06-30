@@ -212,7 +212,7 @@ class Command(ServerManagementBaseCommand):
             optional_packages = config['optional_packages']
 
         python_version = remote['server'].get('python_version', '3')
-
+        pip_command = 'pip{}'.format(python_version if python_version == '3' else '')
         # Define base tasks
         base_tasks = [
             # Add nginx and Let's Encrypt PPAs.  We add them up here because an
@@ -283,11 +283,11 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': 'Update pip',
-                'command': 'pip install -U pip',
+                'command': '{} install -U pip'.format(pip_command),
             },
             {
                 'title': 'Install virtualenv',
-                'command': 'pip install virtualenv',  # TODO: Will this need to change if we use Python 3? (probably)
+                'command': '{} install virtualenv'.format(pip_command),
             },
             {
                 'title': 'Set the timezone to UTC',
