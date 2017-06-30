@@ -213,6 +213,7 @@ class Command(ServerManagementBaseCommand):
 
         python_version = remote['server'].get('python_version', '3')
         pip_command = 'pip{}'.format(python_version if python_version == '3' else '')
+        python_command = 'python{}'.format(python_version if python_version == '3' else '')
         # Define base tasks
         base_tasks = [
             # Add nginx and Let's Encrypt PPAs.  We add them up here because an
@@ -248,10 +249,10 @@ class Command(ServerManagementBaseCommand):
                         'ufw',  # Installed by default on Ubuntu, not elsewhere
 
                         # Project requirements
-                        'python{}-dev'.format(python_version if python_version == '3' else ''),
-                        'python{}-pip'.format(python_version if python_version == '3' else ''),
+                        '{}-dev'.format(python_command),
+                        '{}-pip'.format(python_command),
                         'apache2-utils',  # Required for htpasswd
-                        'python{}-passlib'.format(python_version if python_version == '3' else ''),  # Required for generating the htpasswd file
+                        '{}-passlib'.format(python_command),  # Required for generating the htpasswd file
                         'supervisor',
                         'libjpeg-dev',
                         'libffi-dev',
@@ -268,7 +269,10 @@ class Command(ServerManagementBaseCommand):
                         # Postgres requirements
                         'postgresql',
                         'libpq-dev',
-                        'python{}-psycopg2'.format(python_version if python_version == '3' else ''),  # TODO: Is this required?
+                        '{}-psycopg2'.format(python_command),  # TODO: Is this required?
+
+                        # Required under Python 3.
+                        'python3-venv' if python_version == '3' else '',
 
                         # Other
                         'libgeoip-dev' if optional_packages.get('geoip', True) else '',
@@ -593,7 +597,7 @@ class Command(ServerManagementBaseCommand):
         ]
         run_tasks(env, static_tasks)
 
-        virtualenv_command = 'virtualenv /var/www/{project}/.venv --no-site-packages' if python_version != '3' else 'python3 -m venv /var/www/{project}/.venv --no-site-packages'
+        virtualenv_command = 'virtualenv /var/www/{project}/.venv' if python_version != '3' else 'python3 -m venv /var/www/{project}/.venv'
         # Define venv tasks
         venv_tasks = [
             {
