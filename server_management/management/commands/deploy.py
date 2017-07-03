@@ -211,7 +211,8 @@ class Command(ServerManagementBaseCommand):
         if 'optional_packages' in config:
             optional_packages = config['optional_packages']
 
-        python_version = remote['server'].get('python_version', '3')
+        python_version_full = remote['server'].get('python_version', '3')
+        python_version = python_version_full[0]
         pip_command = 'pip{}'.format(python_version if python_version == '3' else '')
         python_command = 'python{}'.format(python_version if python_version == '3' else '')
         # Define base tasks
