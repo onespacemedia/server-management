@@ -203,6 +203,10 @@ class Command(ServerManagementBaseCommand):
         # Set local project path
         local_project_path = django_settings.SITE_ROOT
 
+        # Get our python version - we'll need this while rebuilding the
+        # virtualenv.
+        python_version = remote['server'].get('python_version', '3')
+
         # Change into the local project folder
         with hide('output', 'running', 'warnings'):
             with lcd(local_project_path):
@@ -246,7 +250,7 @@ class Command(ServerManagementBaseCommand):
                 if result.return_code == 0:
                     sudo('virtualenv -p /usr/bin/pypy {}'.format(venv))
                 else:
-                    sudo('virtualenv {}'.format(venv))
+                    sudo('virtualenv -p python{} {}'.format(python_version, venv))
 
                 with virtualenv(venv):
                     with shell_env(DJANGO_SETTINGS_MODULE=settings_module):
