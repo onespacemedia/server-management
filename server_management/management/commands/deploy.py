@@ -213,8 +213,8 @@ class Command(ServerManagementBaseCommand):
 
         python_version_full = remote['server'].get('python_version', '3')
         python_version = python_version_full[0]
-        pip_command = 'pip{}'.format(python_version if python_version == '3' else '')
-        python_command = 'python{}'.format(python_version if python_version == '3' else '')
+        pip_command = 'pip{}'.format(python_version_full)
+        python_command = 'python{}'.format(python_version_full)
         # Define base tasks
         base_tasks = [
             # Add nginx and Let's Encrypt PPAs.  We add them up here because an
@@ -278,6 +278,8 @@ class Command(ServerManagementBaseCommand):
                         # Other
                         'libgeoip-dev' if optional_packages.get('geoip', True) else '',
                         'libmysqlclient-dev' if optional_packages.get('mysql', True) else '',
+                        'python3.6' if python_version_full == '3.6' else '',
+                        'python3.6-dev' if python_version_full == '3.6' else '',
                     ])
                 )
             },
@@ -299,6 +301,12 @@ class Command(ServerManagementBaseCommand):
                 'command': 'timedatectl set-timezone UTC',
             }
         ]
+
+        if python_version_full == '3.6':
+            tasks.insert(0, {
+                'title': 'Add Python 3.6 PPA',
+                'command': 'add-apt-repository ppa:jonathonf/python-3.6',
+            })
 
         run_tasks(env, base_tasks)
 
@@ -598,12 +606,18 @@ class Command(ServerManagementBaseCommand):
         ]
         run_tasks(env, static_tasks)
 
-        virtualenv_command = 'virtualenv /var/www/{project}/.venv' if python_version != '3' else 'python3 -m venv /var/www/{project}/.venv'
+        virtualenv_command = (
+            'virtualenv -p python{python} /var/www/{project}/.venv' if python_version != '3'
+            else 'python{python} -m venv /var/www/{project}/.venv'
+        )
         # Define venv tasks
         venv_tasks = [
             {
                 'title': 'Create the virtualenv',
-                'command': virtualenv_command.format(project=project_folder)
+                'command': virtualenv_command.format(
+                    python=python_version_full,
+                    project=project_folder,
+                ),
             },
             # This shouldn't be necessary (we think we upgraded pip earlier)
             # but it is - you'll get complaints about bdist_wheel without
