@@ -1,10 +1,8 @@
-from django.conf import settings as django_settings
-from django.core.management.base import BaseCommand
-
-from _core import load_config, ServerManagementBaseCommand
-
-from fabric.api import *
 import os
+from django.conf import settings as django_settings
+from fabric.api import env, hide, lcd, local, settings
+
+from ._core import load_config, ServerManagementBaseCommand
 
 
 class Command(ServerManagementBaseCommand):
@@ -14,7 +12,7 @@ class Command(ServerManagementBaseCommand):
 
     def handle(self, *args, **options):
         # Load server config from project
-        config, remote = load_config(env, options.get('remote', ''))
+        load_config(env, options.get('remote', ''))
 
         # Set local project path
         local_project_path = django_settings.SITE_ROOT
@@ -28,7 +26,7 @@ class Command(ServerManagementBaseCommand):
                     ), capture=True)
 
         with settings(warn_only=True):
-            local('rsync --progress -av{} {}/ {}@{}:/var/www/{}_media/'.format(
+            local('rsync --progress -O -av{} {}/ {}@{}:/var/www/{}_media/'.format(
                 ' ' if not getattr(env, 'key_filename') else ' -e "ssh -i {}"'.format(
                     os.path.expanduser(env.key_filename),  # Fixes an rsync bug with ~ paths.
                 ),
