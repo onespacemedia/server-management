@@ -1,14 +1,13 @@
-from django.conf import settings as django_settings
-from fabric.api import *
-from fabvenv import virtualenv
-
-from _core import load_config, ServerManagementBaseCommand
-
 import datetime
 import json
-import requests
 import os
 import sys
+import requests
+from django.conf import settings as django_settings
+from fabric.api import sudo, run, hide, lcd, settings, shell_env, cd, local, env
+from fabvenv import virtualenv
+
+from ._core import load_config, ServerManagementBaseCommand
 
 
 class Command(ServerManagementBaseCommand):
@@ -16,18 +15,18 @@ class Command(ServerManagementBaseCommand):
     slack_enabled = False
     slack_endpoints = []
 
-    current_commit = os.popen("git rev-parse --short HEAD").read().strip()
-    remote = os.popen("git config --get remote.origin.url").read().split(':')[1].split('.')[0]
+    current_commit = os.popen('git rev-parse --short HEAD').read().strip()
+    remote = os.popen('git config --get remote.origin.url').read().split(':')[1].split('.')[0]
     remote = 'production'
 
     def _bitbucket_commit_url(self, commit):
-        return "<https://bitbucket.org/{}/commits/{commit}|{commit}>".format(
+        return '<https://bitbucket.org/{}/commits/{commit}|{commit}>'.format(
             self.remote,
             commit=commit,
         )
 
     def _bitbucket_diff_url(self, commit1, commit2):
-        return "<https://bitbucket.org/{}/branches/compare/{}..{}#diff|diff>".format(
+        return '<https://bitbucket.org/{}/branches/compare/{}..{}#diff|diff>'.format(
             self.remote,
             commit2,
             commit1,
@@ -177,6 +176,16 @@ class Command(ServerManagementBaseCommand):
         self._notify_failed(str(value))
         sys.__excepthook__(exctype, value, traceback)
 
+    def add_arguments(self, parser):
+        super(Command, self).add_arguments(parser)
+        parser.add_argument(
+            '--force-update',
+            action='store_true',
+            dest='force_update',
+            default=False,
+            help='Force server to update, even if there are no changes detected.',
+        )
+
     def handle(self, *args, **options):
         # Load server config from project
         config, remote = load_config(env, options.get('remote', ''))
@@ -194,78 +203,70 @@ class Command(ServerManagementBaseCommand):
         # Set local project path
         local_project_path = django_settings.SITE_ROOT
 
+        # Get our python version - we'll need this while rebuilding the
+        # virtualenv.
+        python_version = remote['server'].get('python_version', '3')
+
         # Change into the local project folder
         with hide('output', 'running', 'warnings'):
             with lcd(local_project_path):
-
                 project_folder = local("basename $( find {} -name 'wsgi.py' -not -path '*/.venv/*' -not -path '*/venv/*' | xargs -0 -n1 dirname )".format(
                     local_project_path
                 ), capture=True)
 
-        with cd('/var/www/{}'.format(project_folder)):
-            self.server_commit = run("git rev-parse --short HEAD")
+        with settings(sudo_user=project_folder), cd('/var/www/{}'.format(project_folder)):
+            self.server_commit = run('git rev-parse --short HEAD')
+            settings_module = '{}.settings.{}'.format(
+                project_folder,
+                remote['server'].get('settings_file', 'production'),
+            )
 
             # Check which venv we need to use.
             with settings(warn_only=True):
-                result = run("bash -c '[ -d venv ]'")
+                result = run('bash -c \'[ -d venv ]\'')
 
             if result.return_code == 0:
                 venv = '/var/www/{}/venv/'.format(project_folder)
             else:
                 venv = '/var/www/{}/.venv/'.format(project_folder)
 
-            sudo('chown {}:webapps -R /var/www/*'.format(project_folder))
-            sudo('chmod -R g+w /var/www/{}*'.format(project_folder))
-            sudo('chmod ug+rwX -R /var/www/{}/.git'.format(project_folder))
+            sudo('git config --global user.email "developers@onespacemedia.com"')
+            sudo('git config --global user.name "Onespacemedia Developers"')
+            sudo('git config --global rebase.autoStash true')
+            git_changes = sudo('git pull --rebase')
 
-            # Ensure the current user is in the webapps group.
-            sudo('usermod -aG webapps {}'.format(env.user))
+            if 'is up to date.' in git_changes and not options['force_update']:
+                self.stdout.write('Server is up to date.')
+                exit()
 
-            run('git config --global user.email "developers@onespacemedia.com"')
-            run('git config --global user.name "Onespacemedia Developers"')
-            run('git stash')
-            git_changes = run('git pull')
-
-            sudo('chmod -R g+w /var/www/{}*'.format(project_folder))
-
-            if 'requirements' in git_changes:
+            if ('requirements' in git_changes) or options['force_update']:
                 # Rebuild the virtualenv.
-                sudo('rm -rf {}'.format(venv), user=project_folder)
+                sudo('rm -rf {}'.format(venv))
 
                 # Check if we have PyPy
                 with settings(warn_only=True):
-                    result = run("test -x /usr/bin/pypy")
+                    result = run('test -x /usr/bin/pypy')
 
                 if result.return_code == 0:
-                    sudo('virtualenv -p /usr/bin/pypy {}'.format(venv), user=project_folder)
+                    sudo('virtualenv -p /usr/bin/pypy {}'.format(venv))
                 else:
-                    sudo('virtualenv {}'.format(venv), user=project_folder)
-
-                sudo('chown -R {}:webapps {}'.format(project_folder, venv))
-                sudo('chmod -R g+w /var/www/{}*'.format(project_folder))
+                    sudo('virtualenv -p python{} {}'.format(python_version, venv))
 
                 with virtualenv(venv):
-                    with shell_env(DJANGO_SETTINGS_MODULE="{}.settings.{}".format(
-                        project_folder,
-                        remote['server'].get('settings_file', 'production')
-                    )):
-
-                        sudo('pip install -q gunicorn', user=project_folder)
-                        sudo('[[ -e requirements.txt ]] && pip install -qr requirements.txt', user=project_folder)
+                    with shell_env(DJANGO_SETTINGS_MODULE=settings_module):
+                        sudo('[[ -e requirements.txt ]] && pip install -qr requirements.txt')
 
             with virtualenv(venv):
-                with shell_env(DJANGO_SETTINGS_MODULE="{}.settings.{}".format(
-                    project_folder,
-                    remote['server'].get('settings_file', 'production')
-                )):
+                with shell_env(DJANGO_SETTINGS_MODULE=settings_module):
+                    sudo('pip install -q gunicorn')
 
                     if remote['server'].get('build_system', 'npm') == 'npm':
-                        sudo('. ~/.nvm/nvm.sh && yarn', user=project_folder, shell='/bin/bash')
-                        sudo('. ~/.nvm/nvm.sh && yarn run build', user=project_folder, shell='/bin/bash')
+                        sudo('. ~/.nvm/nvm.sh && yarn', shell='/bin/bash')
+                        sudo('. ~/.nvm/nvm.sh && yarn run build', shell='/bin/bash')
 
-                    run('./manage.py collectstatic --noinput')
+                    sudo('./manage.py collectstatic --noinput')
 
-                    requirements = run('pip freeze')
+                    requirements = sudo('pip freeze')
                     compressor = False
                     watson = False
                     for line in requirements.split('\n'):
@@ -275,15 +276,14 @@ class Command(ServerManagementBaseCommand):
                             watson = True
 
                     if not compressor:
-                        sudo('./manage.py compileassets', user=project_folder)
+                        sudo('./manage.py compileassets')
 
-                    sudo('yes yes | ./manage.py migrate', user=project_folder)
+                    sudo('yes yes | ./manage.py migrate')
 
                     if watson:
-                        sudo('./manage.py buildwatson', user=project_folder)
+                        sudo('./manage.py buildwatson')
 
-                    sudo('supervisorctl restart all')
-                    sudo('chown {}:webapps -R /var/www/*'.format(project_folder))
+        sudo('supervisorctl restart all')
 
         # Register the release with Opbeat.
         if 'opbeat' in config and config['opbeat']['app_id'] and config['opbeat']['secret_token']:

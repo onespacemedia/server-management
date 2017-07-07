@@ -1,15 +1,14 @@
-from _core import load_config, ServerManagementBaseCommand, run_tasks
-
-from fabric.api import *
-
 import os
+from fabric.api import env, local, run, settings, sudo
+
+from ._core import load_config, ServerManagementBaseCommand, run_tasks
 
 
 class Command(ServerManagementBaseCommand):
 
     def handle(self, *args, **options):
         # Load server config from project
-        config, remote = load_config(env, options.get('remote', ''))
+        config, remote = load_config(env, options.get('remote', ''), debug=options['debug'])
 
         with settings(warn_only=True):
 
@@ -30,64 +29,40 @@ class Command(ServerManagementBaseCommand):
 
             # Define db tasks
             db_tasks = [
+                dict(title='Stop Supervisor tasks', command='sudo supervisorctl stop all'),
                 {
-                    'title': "Stop Supervisor tasks",
-                    'ansible_arguments': {
-                        'module_name': 'command',
-                        'module_args': 'supervisorctl stop all'
-                    }
+                    'title': 'Drop database',
+                    'command': 'sudo su - postgres -c "dropdb -w {name}"'.format(
+                        name=remote['database']['name'],
+                    ),
                 },
                 {
-                    'title': "Drop database",
-                    'ansible_arguments': {
-                        'module_name': 'postgresql_db',
-                        'module_args': "name='{}' state=absent".format(
-                                       remote['database']['name']
-                        ),
-                        'sudo_user': 'postgres'
-                    }
+                    'title': 'Ensure database is created',
+                    'command': 'sudo su - postgres -c "createdb {name} --encoding=UTF-8 --locale=en_GB.UTF-8 --template=template0 --owner={owner} --no-password"'.format(
+                        name=remote['database']['name'],
+                        owner=remote['database']['user'],
+                    ),
                 },
                 {
-                    'title': "Ensure database is created",
-                    'ansible_arguments': {
-                        'module_name': 'postgresql_db',
-                        'module_args': "name='{}' encoding='UTF-8' lc_collate='en_GB.UTF-8' lc_ctype='en_GB.UTF-8' "
-                                       "template='template0' state=present".format(
-                                           remote['database']['name']
-                                       ),
-                        'sudo_user': 'postgres'
-                    }
+                    'title': 'Ensure user has access to the database',
+                    'command': 'sudo su - postgres -c "psql {name} -c \'GRANT ALL ON DATABASE {name} TO {owner}\'"'.format(
+                        name=remote['database']['name'],
+                        owner=remote['database']['user'],
+                    ),
                 },
                 {
-                    'title': "Ensure user has access to the database",
-                    'ansible_arguments': {
-                        'module_name': 'postgresql_user',
-                        'module_args': "db='{}' name='{}' password='{}' priv=ALL state=present".format(
-                            remote['database']['name'],
-                            remote['database']['user'],
-                            remote['database']['password']
-                        ),
-                        'sudo_user': 'postgres'
-                    }
+                    'title': 'Ensure user does not have unnecessary privileges',
+                    'command': 'sudo su - postgres -c "psql {name} -c \'ALTER USER {owner} WITH NOSUPERUSER NOCREATEDB\'"'.format(
+                        name=remote['database']['name'],
+                        owner=remote['database']['user'],
+                    ),
                 },
                 {
-                    'title': "Ensure user does not have unnecessary privileges",
-                    'ansible_arguments': {
-                        'module_name': 'postgresql_user',
-                        'module_args': 'name={} role_attr_flags=NOSUPERUSER,NOCREATEDB state=present'.format(
-                            remote['database']['name']
-                        ),
-                        'sudo_user': 'postgres'
-                    }
+                    'title': 'Start Supervisor tasks',
+                    'command': 'sudo supervisorctl start all',
                 },
-                {
-                    'title': "Start Supervisor tasks",
-                    'ansible_arguments': {
-                        'module_name': 'command',
-                        'module_args': 'supervisorctl start all'
-                    }
-                }
             ]
+
             run_tasks(env, db_tasks)
 
             # Import the database file

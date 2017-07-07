@@ -1,84 +1,79 @@
+from __future__ import print_function
+
 from optparse import make_option
 
+import json
+import sys
 from django.conf import settings
 from django.core.management.base import BaseCommand
-from fabric.api import hide, prompt, run, settings as fabric_settings
+import fabric
+from fabric.api import hide, prompt, run, settings as fabric_settings, fastprint, sudo
 from fabric.contrib.console import confirm
-import json
-import ansible.runner
-import ansible.inventory
-import sys
+from fabric.colors import green, yellow, red
 
 
-def _add_options(target):
-    return (
-        target(
+class ServerManagementBaseCommand(BaseCommand):
+
+    def add_arguments(self, parser):
+        super(ServerManagementBaseCommand, self).add_arguments(parser)
+
+        parser.add_argument(
             '--remote',
             dest='remote',
             default=None,
             help='remote host'
         )
-    )
+
+        parser.add_argument(
+            '--debug',
+            dest='debug',
+            action='store_true',
+            default=False,
+        )
+
+        parser.add_argument(
+            '--noinput',
+            dest='noinput',
+            action='store_true',
+            default=False,
+        )
 
 
-class ServerManagementBaseCommand(BaseCommand):
-
-    if hasattr(BaseCommand, 'option_list'):
-        # Django < 1.10
-        option_list = BaseCommand.option_list + _add_options(make_option)
-    else:
-        # Django >= 1.10
-        def add_arguments(self, parser):
-            _add_options(parser.add_argument)
-
-
-def load_config(env, remote=None, config_user='deploy'):
+def load_config(env, remote=None, config_user='deploy', debug=False):
     env['sudo_prefix'] += '-H '
 
     # Load the json file
     try:
-        json_data = open("{}/server.json".format(
-            settings.SITE_ROOT
-        ))
-        config = json.load(json_data)
-    except:
-        raise Exception(
-            "Something is wrong with the server.json file, make sure it exists and is valid JSON.")
+        with open('{}/server.json'.format(settings.SITE_ROOT), 'r', encoding='utf-8') as json_data:
+            config = json.loads(json_data.read())
+    except Exception as e:
+        print(e)
+        raise Exception('Something is wrong with the server.json file, make sure it exists and is valid JSON.')
 
     # Define current host from settings in server config
     # First check if there is a single remote or multiple.
-    if 'remote' in config:
-        env.host_string = config['remote']['server']['ip']
-        remote = config['remote']
-        config['remote_name'] = 'production'
-    elif 'remotes' in config:
-        # Prompt for a host selection.
-        remote_keys = config['remotes'].keys()
-        if len(remote_keys) == 0:
-            print "No remotes specified in config."
-            exit()
-        elif len(remote_keys) == 1:
-            remote_prompt = remote_keys[0]
+    if 'remotes' not in config or not config['remotes']:
+        raise Exception('No remotes specified in config.')
 
-        elif remote:
-            remote_prompt = remote
-            if remote_prompt not in remote_keys:
-                raise Exception("Invalid remote name `{}`.".format(remote))
-                exit()
-        else:
-            print "Available hosts: {}".format(
-                ', '.join(config['remotes'].keys())
-            )
+    # Prompt for a host selection.
+    remote_keys = list(config['remotes'].keys())
+    if len(remote_keys) == 1:
+        remote_prompt = remote_keys[0]
+    elif remote:
+        if remote_prompt not in remote_keys:
+            raise Exception('Invalid remote name `{}`.'.format(remote))
 
-            remote_prompt = prompt("Please enter a remote: ",
-                                   default=remote_keys[0])
-
-        env.host_string = config['remotes'][remote_prompt]['server']['ip']
-        remote = config['remotes'][remote_prompt]
-        config['remote_name'] = remote_prompt
+        remote_prompt = remote
     else:
-        print "No remotes specified in config."
-        exit()
+        print('Available hosts: {}'.format(
+            ', '.join(config['remotes'].keys())
+        ))
+
+        remote_prompt = prompt('Please enter a remote: ', default=remote_keys[0], validate=lambda x: x in remote_keys)
+
+    remote = config['remotes'][remote_prompt]
+    env.host_string = remote['server']['ip']
+    config['remote_name'] = remote_prompt
 
     env.user = config_user
     env.disable_known_hosts = True
@@ -117,76 +112,59 @@ def load_config(env, remote=None, config_user='deploy'):
     with hide('output', 'running', 'warnings'):
         with fabric_settings(warn_only=True):
             if not run('whoami'):
-                print "Failed to connect to remote server"
+                print('Failed to connect to remote server')
                 exit()
+
+    if not debug:
+        # Change the output to be less verbose.
+        fabric.state.output['stdout'] = False
+        fabric.state.output['running'] = False
 
     # Return the server config
     return config, remote
 
 
-def check_request(request, env, request_type, color='\033[95m'):
-    if len(request['dark']) or request['contacted'][env.host_string].get(
-            'failed', None) is True:
-        print "[{}{}\033[0m] [\033[91mFAILED\033[0m]".format(color,
-                                                             request_type)
-        print request
+def title_print(title, state=''):
+    if state == 'task':
+        fastprint('[{}] {} ... '.format(
+            yellow('TASK'),
+            title,
+        ))
+    elif state == 'succeeded':
+        fastprint('\r[{}] {} ... done'.format(
+            green('TASK'),
+            title,
+        ), end='\n')
+    elif state == 'failed':
+        fastprint('\r[{}] {} ... failed'.format(
+            red('TASK'),
+            title,
+        ), end='\n')
+
         exit()
-    else:
-        print "[{}{}\033[0m] [\033[92mDONE\033[0m]".format(color, request_type)
 
 
-def ansible_task(env, **kwargs):
-    # Create ansible inventory
-    ansible_inventory = ansible.inventory.Inventory([env.host_string])
-
-    ansible_args = dict({
-                            'pattern': 'all',
-                            'inventory': ansible_inventory,
-                            'sudo': True,
-                            'sudo_user': 'root',
-                            'remote_user': env.user
-                        }.items() + kwargs.items())
-
-    if getattr(env, 'key_filename'):
-        ansible_args['private_key_file'] = env.key_filename
-
-    return ansible.runner.Runner(**ansible_args).run()
+def check_request(task, result):
+    if result.succeeded:
+        title_print(task['title'], state='succeeded')
+    elif result.failed:
+        title_print(task['title'], state='failed')
 
 
-def run_tasks(env, tasks):
+def run_tasks(env, tasks, user=None):
     # Loop tasks
     for task in tasks:
+        title_print(task['title'], state='task')
 
-        if not task.get('with_items'):
-            print "[\033[95mTASK\033[0m] {}...".format(task['title'])
+        # Generic command
+        if 'command' in task:
+            if user:
+                task_result = sudo(task['command'], user=user)
+            else:
+                task_result = run(task['command'])
+        # Fabric API
+        elif 'fabric_command' in task:
+            task_result = getattr(fabric.api, task['fabric_command'])(*task.get('fabric_args', []), **task.get('fabric_kwargs', {}))
 
-            # Run task with arguments
-            task_result = ansible_task(env, **task['ansible_arguments'])
-
-            # Check result
-            check_request(task_result, env, "TASK")
-
-        else:
-            print "[\033[95mTASK\033[0m] {}...".format(task['title'])
-
-            # Store task args pattern
-            module_args_pattern = task['ansible_arguments']['module_args']
-
-            for item in task.get('with_items'):
-                print "[\033[94mITEM\033[0m] {}".format(item)
-
-                # Format args with item
-                task['ansible_arguments'][
-                    'module_args'] = module_args_pattern.format(
-                    item=item
-                )
-
-                # Run task with arguments
-                task_result = ansible_task(env, **task['ansible_arguments'])
-
-                # Check result
-                check_request(task_result, env, "ITEM", color='\033[94m')
-
-            print "[\033[95mTASK\033[0m] [\033[92mDONE\033[0m]"
-
-        print ""
+        # Check result
+        check_request(task, task_result)

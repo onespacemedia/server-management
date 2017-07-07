@@ -9,7 +9,7 @@ os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
 setup(
     name='onespacemedia-server-management',
-    version='0.5.0',
+    version='3.0.0',
     packages=[
         'server_management',
         'server_management.management',
@@ -19,7 +19,7 @@ setup(
     description='A set of server management tools used by Onespacemedia.',
     long_description=README,
     url='https://github.com/onespacemedia/server-management/',
-    author='James Foley',
-    author_email='jamesfoley@onespacemedia.com',
-    install_requires=['django', 'fabric', 'ansible==1.8.4', 'requests', 'fabric-virtualenv'],
+    author='James Foley, Daniel Samuels',
+    author_email='developers@onespacemedia.com',
+    install_requires=['django', 'fabric3', 'requests', 'fabric3-virtualenv'],
 )

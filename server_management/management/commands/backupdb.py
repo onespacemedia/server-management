@@ -1,8 +1,7 @@
 from django.utils.timezone import now
+from fabric.api import env, local, settings, sudo
 
-from _core import load_config, ServerManagementBaseCommand
-
-from fabric.api import *
+from ._core import load_config, ServerManagementBaseCommand
 
 
 class Command(ServerManagementBaseCommand):
@@ -13,7 +12,7 @@ class Command(ServerManagementBaseCommand):
 
         with settings(warn_only=True):
             # Dump the database on the server.
-            sudo("su - {user} -c 'pg_dump {name} -cOx -U {user} -f /home/{user}/{name}.sql --clean'".format(
+            sudo('su - {user} -c \'pg_dump {name} -cOx -U {user} -f /home/{user}/{name}.sql --clean\''.format(
                 name=remote['database']['name'],
                 user=remote['database']['user'],
             ))

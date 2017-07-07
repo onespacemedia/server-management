@@ -1,6 +1,6 @@
-from _core import load_config, ServerManagementBaseCommand
+from fabric.api import env, local, settings, sudo
 
-from fabric.api import *
+from ._core import load_config, ServerManagementBaseCommand
 
 
 class Command(ServerManagementBaseCommand):
