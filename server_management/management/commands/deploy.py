@@ -251,9 +251,9 @@ class Command(ServerManagementBaseCommand):
 
                         # Project requirements
                         '{}-dev'.format(python_command),
-                        '{}-pip'.format(python_command),
+                        'python{}-pip'.format('3' if python_version == '3' else ''),
                         'apache2-utils',  # Required for htpasswd
-                        '{}-passlib'.format(python_command),  # Required for generating the htpasswd file
+                        'python{}-passlib'.format('3' if python_version == '3' else ''),  # Required for generating the htpasswd file
                         'supervisor',
                         'libjpeg-dev',
                         'libffi-dev',
@@ -270,7 +270,7 @@ class Command(ServerManagementBaseCommand):
                         # Postgres requirements
                         'postgresql',
                         'libpq-dev',
-                        '{}-psycopg2'.format(python_command),  # TODO: Is this required?
+                        'python{}-psycopg2'.format(3 if python_version == '3' else ''),  # TODO: Is this required?
 
                         # Required under Python 3.
                         'python3-venv' if python_version == '3' else '',
