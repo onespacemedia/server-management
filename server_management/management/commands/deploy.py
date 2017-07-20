@@ -213,7 +213,7 @@ class Command(ServerManagementBaseCommand):
 
         python_version_full = remote['server'].get('python_version', '3')
         python_version = python_version_full[0]
-        pip_command = 'pip{}'.format(python_version_full)
+        pip_command = 'pip{}'.format(3 if python_version == '3' else '')
         python_command = 'python{}'.format(python_version_full)
         # Define base tasks
         base_tasks = [
