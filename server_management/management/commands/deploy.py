@@ -303,7 +303,7 @@ class Command(ServerManagementBaseCommand):
         ]
 
         if python_version_full == '3.6':
-            tasks.insert(0, {
+            base_tasks.insert(0, {
                 'title': 'Add Python 3.6 PPA',
                 'command': 'add-apt-repository ppa:jonathonf/python-3.6',
             })
