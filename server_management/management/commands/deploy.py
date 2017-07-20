@@ -607,15 +607,14 @@ class Command(ServerManagementBaseCommand):
         run_tasks(env, static_tasks)
 
         virtualenv_command = (
-            'virtualenv -p python{python} /var/www/{project}/.venv' if python_version != '3'
-            else 'python{python} -m venv /var/www/{project}/.venv'
+            'virtualenv -p python{python_full} /var/www/{project}/.venv'
         )
         # Define venv tasks
         venv_tasks = [
             {
                 'title': 'Create the virtualenv',
                 'command': virtualenv_command.format(
-                    python=python_version_full,
+                    python_full=python_version_full,
                     project=project_folder,
                 ),
             },
