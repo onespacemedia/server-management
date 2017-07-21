@@ -264,7 +264,7 @@ class Command(ServerManagementBaseCommand):
                         sudo('. ~/.nvm/nvm.sh && yarn', shell='/bin/bash')
                         sudo('. ~/.nvm/nvm.sh && yarn run build', shell='/bin/bash')
 
-                    sudo('./manage.py collectstatic --noinput')
+                    sudo('python manage.py collectstatic --noinput')
 
                     requirements = sudo('pip freeze')
                     compressor = False
@@ -276,12 +276,12 @@ class Command(ServerManagementBaseCommand):
                             watson = True
 
                     if not compressor:
-                        sudo('./manage.py compileassets')
+                        sudo('python manage.py compileassets')
 
-                    sudo('yes yes | ./manage.py migrate')
+                    sudo('yes yes | python manage.py migrate')
 
                     if watson:
-                        sudo('./manage.py buildwatson')
+                        sudo('python manage.py buildwatson')
 
         sudo('supervisorctl restart all')
 
