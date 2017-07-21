@@ -213,7 +213,7 @@ class Command(ServerManagementBaseCommand):
 
         python_version_full = remote['server'].get('python_version', '3')
         python_version = python_version_full[0]
-        pip_command = 'pip{}'.format(python_version_full)
+        pip_command = 'pip{}'.format(3 if python_version == '3' else '')
         python_command = 'python{}'.format(python_version_full)
         # Define base tasks
         base_tasks = [
@@ -251,9 +251,9 @@ class Command(ServerManagementBaseCommand):
 
                         # Project requirements
                         '{}-dev'.format(python_command),
-                        '{}-pip'.format(python_command),
+                        'python{}-pip'.format('3' if python_version == '3' else ''),
                         'apache2-utils',  # Required for htpasswd
-                        '{}-passlib'.format(python_command),  # Required for generating the htpasswd file
+                        'python{}-passlib'.format('3' if python_version == '3' else ''),  # Required for generating the htpasswd file
                         'supervisor',
                         'libjpeg-dev',
                         'libffi-dev',
@@ -270,7 +270,7 @@ class Command(ServerManagementBaseCommand):
                         # Postgres requirements
                         'postgresql',
                         'libpq-dev',
-                        '{}-psycopg2'.format(python_command),  # TODO: Is this required?
+                        'python{}-psycopg2'.format(3 if python_version == '3' else ''),  # TODO: Is this required?
 
                         # Required under Python 3.
                         'python3-venv' if python_version == '3' else '',
@@ -303,9 +303,9 @@ class Command(ServerManagementBaseCommand):
         ]
 
         if python_version_full == '3.6':
-            tasks.insert(0, {
+            base_tasks.insert(0, {
                 'title': 'Add Python 3.6 PPA',
-                'command': 'add-apt-repository ppa:jonathonf/python-3.6',
+                'command': 'add-apt-repository -y ppa:jonathonf/python-3.6',
             })
 
         run_tasks(env, base_tasks)
@@ -607,15 +607,14 @@ class Command(ServerManagementBaseCommand):
         run_tasks(env, static_tasks)
 
         virtualenv_command = (
-            'virtualenv -p python{python} /var/www/{project}/.venv' if python_version != '3'
-            else 'python{python} -m venv /var/www/{project}/.venv'
+            'virtualenv -p python{python_full} /var/www/{project}/.venv'
         )
         # Define venv tasks
         venv_tasks = [
             {
                 'title': 'Create the virtualenv',
                 'command': virtualenv_command.format(
-                    python=python_version_full,
+                    python_full=python_version_full,
                     project=project_folder,
                 ),
             },
