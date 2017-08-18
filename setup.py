@@ -9,7 +9,7 @@ os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
 setup(
     name='onespacemedia-server-management',
-    version='3.0.1',
+    version='3.0.2',
     packages=[
         'server_management',
         'server_management.management',
