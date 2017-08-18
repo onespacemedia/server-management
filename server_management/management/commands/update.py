@@ -283,6 +283,9 @@ class Command(ServerManagementBaseCommand):
                     if watson:
                         sudo('python manage.py buildwatson')
 
+        sudo("sudo su -c \"find /var/www/{project_folder}_static/ -type f \( -name '*.js' -o -name '*.css' -o -name '*.svg' \) -exec gzip -v -k -f --best {{}} \;\" {project_folder}".format(
+            project_folder=project_folder,
+        ))
         sudo('supervisorctl restart all')
 
         # Register the release with Opbeat.
