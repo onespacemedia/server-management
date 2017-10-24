@@ -88,6 +88,7 @@ server {
         add_header Pragma public;
         add_header Cache-Control "public";
         gzip_static on;
+        gzip_vary on;
     }
 
     location /media/ {
