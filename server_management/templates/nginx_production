@@ -1,0 +1,58 @@
+# Base configuration from Mozilla SSL Configuration Generator
+# https://mozilla.github.io/server-side-tls/ssl-config-generator/?server=nginx-1.10.1&openssl=1.0.1e&hsts=yes&profile=intermediate
+
+server {
+    # SSL configuration
+    server_name {{ domain_names }};
+    listen 80 default_server;
+
+    # Project configuration
+    charset utf-8;
+    server_tokens off;
+
+    fastcgi_buffers 16 16k;
+    fastcgi_buffer_size 32k;
+
+    proxy_buffer_size 128k;
+    proxy_buffers 4 256k;
+    proxy_busy_buffers_size 256k;
+
+    client_max_body_size 4G;
+
+    # Make TCP send multiple buffers as individual packets.
+    tcp_nodelay on;
+
+    # Send half empty (or half full) packets.
+    tcp_nopush on;
+
+    location /static/ {
+        alias   /var/www/{{ project }}_static/;
+        expires 30d;
+        add_header Pragma public;
+        add_header Cache-Control "public";
+        gzip_static on;
+        gzip_vary on;
+    }
+
+    location /media/ {
+        alias   /var/www/{{ project }}_media/;
+        expires 30d;
+        add_header Pragma public;
+        add_header Cache-Control "public";
+    }
+
+    location / {
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host $http_host;
+        proxy_set_header Authorization "";
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_redirect off;
+
+        # Try to serve static files from nginx, no point in making an
+        # *application* server like Unicorn/Rainbows! serve static files.
+        if (!-f $request_filename) {
+            proxy_pass http://wsgi_server;
+            break;
+        }
+    }
+}

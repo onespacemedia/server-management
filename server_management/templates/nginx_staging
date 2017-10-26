@@ -10,23 +10,16 @@ upstream wsgi_server {
 }
 
 server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
-
-    # Redirect all HTTP requests to HTTPS with a 301 Moved Permanently response.
-    return 301 https://$host$request_uri;
-}
-
-server {
     # Password protection.  Placed at the top of the file to make it easier to remove.
+    # Comment out the following 5 lines of code to remove password protection.
+    # (Remember to run `sudo service nginx reload` after saving)
     satisfy any;
     allow 80.6.99.23;
     deny all;
 
-    # Comment these two lines out to remove password protection.
-    # (Remember to run `sudo service nginx reload` after saving)
     auth_basic "Restricted";
     auth_basic_user_file /etc/nginx/htpasswd;
+    # End password protection
 
     # SSL configuration
     server_name {{ domain_names }};
@@ -65,14 +58,6 @@ server {
     charset utf-8;
     server_tokens off;
 
-    # Note: You should disable gzip for SSL traffic.
-    # See: https://bugs.debian.org/773332
-    # gzip on;
-    # gzip_min_length 1100;
-    # gzip_buffers 4 32k;
-    # gzip_types text/plain application/x-javascript text/xml text/css image/svg+xml;
-    # gzip_vary on;
-
     fastcgi_buffers 16 16k;
     fastcgi_buffer_size 32k;
 
@@ -81,6 +66,12 @@ server {
     proxy_busy_buffers_size 256k;
 
     client_max_body_size 4G;
+
+    # Make TCP send multiple buffers as individual packets.
+    tcp_nodelay on;
+
+    # Send half empty (or half full) packets.
+    tcp_nopush on;
 
     location /static/ {
         alias   /var/www/{{ project }}_static/;

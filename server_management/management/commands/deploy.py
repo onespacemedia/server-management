@@ -22,8 +22,6 @@ class Command(ServerManagementBaseCommand):
         # Set local project path
         local_project_path = django_settings.SITE_ROOT
 
-        print(os.getenv('DJANGO_SETTINGS_MODULE'))
-
         if django_settings.DEBUG:
             abort(
                 "You're currently using your local settings file, you need use production instead.\n"
@@ -82,22 +80,33 @@ class Command(ServerManagementBaseCommand):
                         raise Exception("No requirements.txt")
 
         # Compress the domain names for nginx
-        domain_names = " ".join(django_settings.ALLOWED_HOSTS)
+        production_domain_names = ' '.join([
+            host for host in
+            django_settings.ALLOWED_HOSTS
+            if '.onespace.media' not in host
+        ])
+        staging_domain_names = ' '.join([
+            host for host in
+            django_settings.ALLOWED_HOSTS
+            if '.onespace.media' in host
+        ])
 
         # Use the site domain as a fallback domain
         fallback_domain_name = django_settings.SITE_DOMAIN
 
         if not noinput:
             fallback_domain_name = prompt('What should the default domain be?', default=fallback_domain_name)
-            domain_names = prompt('Which domains would you like to enable in nginx?', default=domain_names)
+            production_domain_names = prompt('Which domains would you like to enable in the PRODUCTION nginx config?', default=production_domain_names)
+            staging_domain_names = prompt('Which domains would you like to enable in the STAGING nginx config?', default=staging_domain_names)
         else:
             print('Default domain: ', fallback_domain_name)
-            print('Domains to be enabled in nginx: ', domain_names)
+            print('Production domains to be enabled in nginx: ', production_domain_names)
+            print('Staging domains to be enabled in nginx: ', staging_domain_names)
 
         # If the domain is pointing to the droplet already, we can setup SSL.
         setup_ssl_for = [
             domain_name
-            for domain_name in domain_names.split(' ')
+            for domain_name in staging_domain_names.split(' ')
             if local(f'dig +short {domain_name}', capture=True) == remote['server']['ip']
         ]
 
@@ -106,7 +115,7 @@ class Command(ServerManagementBaseCommand):
                 remote['server']['ip']
             ))
 
-        for domain_name in domain_names.split(' '):
+        for domain_name in staging_domain_names.split(' '):
             if domain_name not in setup_ssl_for:
                 print(f'SSL will not be configured for {domain_name}')
 
@@ -146,7 +155,8 @@ class Command(ServerManagementBaseCommand):
             'gunicorn_start': NamedTemporaryFile(mode='w+', delete=False),
             'supervisor_config': NamedTemporaryFile(mode='w+', delete=False),
             'memcached_supervisor_config': NamedTemporaryFile(mode='w+', delete=False),
-            'nginx_site_config': NamedTemporaryFile(mode='w+', delete=False),
+            'nginx_production': NamedTemporaryFile(mode='w+', delete=False),
+            'nginx_staging': NamedTemporaryFile(mode='w+', delete=False),
             'apt_periodic': NamedTemporaryFile(mode='w+', delete=False),
             'certbot_cronjob': NamedTemporaryFile(mode='w+', delete=False),
         }
@@ -168,12 +178,21 @@ class Command(ServerManagementBaseCommand):
         }))
         session_files['memcached_supervisor_config'].close()
 
-        session_files['nginx_site_config'].write(render_to_string('nginx_site_config', {
+        # Production nginx config
+        session_files['nginx_production'].write(render_to_string('nginx_production', {
             'project': project_folder,
-            'domain_names': domain_names,
+            'domain_names': production_domain_names,
             'fallback_domain_name': fallback_domain_name
         }))
-        session_files['nginx_site_config'].close()
+        session_files['nginx_production'].close()
+
+        # Staging nginx config
+        session_files['nginx_staging'].write(render_to_string('nginx_staging', {
+            'project': project_folder,
+            'domain_names': staging_domain_names,
+            'fallback_domain_name': fallback_domain_name
+        }))
+        session_files['nginx_staging'].close()
 
         session_files['apt_periodic'].write(render_to_string('apt_periodic'))
         session_files['apt_periodic'].close()
@@ -256,6 +275,7 @@ class Command(ServerManagementBaseCommand):
 
                         # Project requirements
                         f'{python_command}-dev',
+                        'python-pip',  # For supervisor
                         'python3-pip',
                         'apache2-utils',  # Required for htpasswd
                         'python3-passlib',  # Required for generating the htpasswd file
@@ -302,7 +322,7 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': 'Install supervisor',
-                'command': f'{pip_command} install supervisor',
+                'command': f'pip2 install supervisor',
             },
             {
                 'title': 'Set the timezone to UTC',
@@ -457,8 +477,7 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': 'Ensure database is created',
-                'command': f'su - postgres -c "createdb {db_name} --encoding=UTF-8 --locale=en_GB.UTF-8 '
-                           '--template=template0 --owner={db_user} --no-password"',
+                'command': f'su - postgres -c "createdb {db_name} --encoding=UTF-8 --locale=en_GB.UTF-8 --template=template0 --owner={db_user} --no-password"',
             },
             {
                 'title': 'Ensure user has access to the database',
@@ -467,7 +486,7 @@ class Command(ServerManagementBaseCommand):
             {
                 'title': 'Ensure user does not have unnecessary privileges',
                 'command': f'su - postgres -c "psql {db_name} -c \'ALTER USER {db_user} WITH NOSUPERUSER '
-                           'NOCREATEDB\'"',
+                'NOCREATEDB\'"',
             },
         ]
         run_tasks(env, db_tasks)
@@ -521,13 +540,15 @@ class Command(ServerManagementBaseCommand):
             title_print(task_title, state='task')
 
             try:
-                response = requests.post('https://api.github.com/repos/{}/{}/keys'.format(github_account, github_repo),
-                                         json={
-                                             'title': f'Application Server ({env.host_string})',
-                                             'key': ssh_key,
-                                             'read_only': True,
-                                         }, headers={
-                        'Authorization': f'token {github_token}'
+                response = requests.post(
+                    f'https://api.github.com/repos/{github_account}/{github_repo}/keys',
+                    json={
+                        'title': f'Application Server ({env.host_string})',
+                        'key': ssh_key,
+                        'read_only': True,
+                    },
+                    headers={
+                        'Authorization': f'token {github_token}',
                     })
 
                 if debug:
@@ -544,7 +565,7 @@ class Command(ServerManagementBaseCommand):
         elif is_github_repo:
             git_url = f'git@github.com:{github_account}/{github_repo}.git'
 
-        git_branch = local('git symbolic-ref --short HEAD')
+        git_branch = local('git symbolic-ref --short HEAD', capture=True)
 
         git_tasks = [
             {
@@ -644,11 +665,13 @@ class Command(ServerManagementBaseCommand):
                 # it at the start of the deployment process, it hasn't necessarily been
                 # committed. So this check covers that.
 
+                # We cd to /tmp/ because git lines in the requirements files breaks things.
+
                 'title': "Install packages required by the Django app inside virtualenv",
-                'command': 'if [ -f /var/www/{project}/requirements.txt ]; then /var/www/{project}/.venv/bin/pip '
+                'command': 'if [ -f /var/www/{project}/requirements.txt ]; then cd /tmp; /var/www/{project}/.venv/bin/pip '
                            'install -r /var/www/{project}/requirements.txt; fi'.format(
-                    project=project_folder,
-                ),
+                               project=project_folder,
+                           ),
             },
             {
                 'title': 'Make sure Gunicorn is installed',
@@ -665,11 +688,19 @@ class Command(ServerManagementBaseCommand):
                 'command': 'service nginx stop',
             },
             {
-                'title': 'Create the Nginx configuration file',
+                'title': 'Create the production Nginx configuration file',
                 'fabric_command': 'put',
                 'fabric_args': [
-                    session_files['nginx_site_config'].name,
-                    f'/etc/nginx/sites-available/{project_folder}',
+                    session_files['nginx_production'].name,
+                    f'/etc/nginx/sites-available/{project_folder}_production',
+                ],
+            },
+            {
+                'title': 'Create the staging Nginx configuration file',
+                'fabric_command': 'put',
+                'fabric_args': [
+                    session_files['nginx_staging'].name,
+                    f'/etc/nginx/sites-available/{project_folder}_staging',
                 ],
             },
             {
@@ -681,8 +712,14 @@ class Command(ServerManagementBaseCommand):
                 'command': 'rm /etc/nginx/sites-enabled/default',
             },
             {
-                'title': 'Ensure that the application site is enabled',
-                'command': 'ln -s /etc/nginx/sites-available/{project} /etc/nginx/sites-enabled/{project}'.format(
+                'title': 'Ensure that the production Nginx config is enabled',
+                'command': 'ln -s /etc/nginx/sites-available/{project}_production /etc/nginx/sites-enabled/{project}_production'.format(
+                    project=project_folder,
+                ),
+            },
+            {
+                'title': 'Ensure that the staging Nginx config is enabled',
+                'command': 'ln -s /etc/nginx/sites-available/{project}_staging /etc/nginx/sites-enabled/{project}_staging'.format(
                     project=project_folder,
                 ),
             },
@@ -690,9 +727,9 @@ class Command(ServerManagementBaseCommand):
                 'title': 'Run certbot',
                 'command': 'certbot certonly --standalone -n --agree-tos --email developers@onespacemedia.com '
                            '--cert-name {} --domains {}'.format(
-                    fallback_domain_name,
-                    ','.join(setup_ssl_for)
-                ),
+                               fallback_domain_name,
+                               ','.join(setup_ssl_for)
+                           ),
             },
             {
                 'title': 'Generate DH parameters (this may take a little while)',
@@ -804,9 +841,9 @@ class Command(ServerManagementBaseCommand):
                     'title': 'Collect static files',
                     'command': '/var/www/{project}/.venv/bin/python /var/www/{project}/manage.py collectstatic '
                                '--noinput --link --settings={project}.settings.{settings}'.format(
-                        project=project_folder,
-                        settings=remote['server'].get('settings_file', 'production'),
-                    ),
+                                   project=project_folder,
+                                   settings=remote['server'].get('settings_file', 'production'),
+                               ),
                 }
             ]
         }
