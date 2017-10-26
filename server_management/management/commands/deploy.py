@@ -239,7 +239,7 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': 'Upgrade everything',
-                'command': 'apt-get upgrade -y',
+                'command': 'apt-get upgrade -yq',
             },
             {
                 'title': 'Install unattended-upgrades',
