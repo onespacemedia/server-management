@@ -544,6 +544,7 @@ class Command(ServerManagementBaseCommand):
         elif is_github_repo:
             git_url = f'git@github.com:{github_account}/{github_repo}.git'
 
+        git_branch = local('git symbolic-ref --short HEAD')
 
         git_tasks = [
             {
@@ -552,7 +553,8 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': 'Setup the Git repo',
-                'command': 'cd /tmp; git clone {url} {project}'.format(
+                'command': 'cd /tmp; git clone -b {branch} {url} {project}'.format(
+                    branch=git_branch,
                     url=git_url,
                     project=f'/var/www/{project_folder}',
                 ),
