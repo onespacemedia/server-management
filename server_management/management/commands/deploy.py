@@ -137,7 +137,7 @@ class Command(ServerManagementBaseCommand):
                 github_token = prompt(
                     'Please enter your Github token (obtained from https://github.com/settings/tokens):')
 
-        circle_token = os.environ.get('CIRCLE_TOKEN', None)
+        circle_token = os.environ.get('CIRCLE_TOKEN', '')
 
         print("")
 
