@@ -15,6 +15,8 @@ class Command(ServerManagementBaseCommand):
     def add_arguments(self, parser):
         super(Command, self).add_arguments(parser)
 
+        parser.add_argument('--commit', default=None)
+
         parser.add_argument(
             '--force-update',
             action='store_true',
@@ -54,12 +56,23 @@ class Command(ServerManagementBaseCommand):
             sudo('git config --global user.name "Onespacemedia Developers"')
             sudo('git config --global rebase.autoStash true')
 
-            git_changes = sudo('git pull --rebase')
+            sudo('git fetch')
+
+            if options.get('commit', False):
+                print('Pulling to specific commit.')
+                sudo('git reset --hard {}'.format(
+                    options.get('commit', False),
+                ))
+            else:
+                print('Pulling to HEAD')
+                sudo('git reset --hard HEAD')
 
             new_git_hash = run('git rev-parse --short HEAD')
             new_venv = f'/var/www/{project_folder}/.venv-{new_git_hash}'
 
-            if 'is up to date.' in git_changes and not options['force_update']:
+            git_changes = sudo(f'git diff --name-only {initial_git_hash} {new_git_hash}')
+
+            if initial_git_hash == new_git_hash and not options['force_update']:
                 self.stdout.write('Server is up to date.')
                 exit()
 
