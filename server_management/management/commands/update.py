@@ -42,77 +42,67 @@ class Command(ServerManagementBaseCommand):
             project_folder = local(f"basename $( find {local_project_path} -name 'wsgi.py' -not -path '*/.venv/*' -not -path '*/venv/*' | xargs -0 -n1 dirname )", capture=True)
 
         with settings(sudo_user=project_folder), cd(f'/var/www/{project_folder}'):
+            initial_git_hash = run('git rev-parse --short HEAD')
+            old_venv = f'/var/www/{project_folder}/.venv-{initial_git_hash}'
+
             settings_module = '{}.settings.{}'.format(
                 project_folder,
                 remote['server'].get('settings_file', 'production'),
             )
 
-            # Check which venv we need to use.
-            with settings(warn_only=True):
-                result = run('bash -c \'[ -d venv ]\'')
-
-            if result.return_code == 0:
-                venv = '/var/www/{}/venv/'.format(project_folder)
-            else:
-                venv = '/var/www/{}/.venv/'.format(project_folder)
-
             sudo('git config --global user.email "developers@onespacemedia.com"')
             sudo('git config --global user.name "Onespacemedia Developers"')
             sudo('git config --global rebase.autoStash true')
+
             git_changes = sudo('git pull --rebase')
+
+            new_git_hash = run('git rev-parse --short HEAD')
+            new_venv = f'/var/www/{project_folder}/.venv-{new_git_hash}'
 
             if 'is up to date.' in git_changes and not options['force_update']:
                 self.stdout.write('Server is up to date.')
                 exit()
 
-            if ('requirements' in git_changes) or options['force_update']:
-                # Rebuild the virtualenv.
-                sudo('rm -rf {}'.format(venv))
+            # Check if we have PyPy
+            with settings(warn_only=True):
+                result = run('test -x /usr/bin/pypy')
 
-                # Check if we have PyPy
-                with settings(warn_only=True):
-                    result = run('test -x /usr/bin/pypy')
+            # Build the virtualenv.
+            if result.return_code == 0:
+                sudo(f'virtualenv -p /usr/bin/pypy {new_venv}')
+            else:
+                sudo(f'virtualenv -p python{python_version} {new_venv}')
 
-                if result.return_code == 0:
-                    sudo('virtualenv -p /usr/bin/pypy {}'.format(venv))
-                else:
-                    sudo('virtualenv -p python{} {}'.format(python_version, venv))
+            with virtualenv(new_venv), shell_env(DJANGO_SETTINGS_MODULE=settings_module):
+                sudo('[[ -e requirements.txt ]] && pip install -r requirements.txt')
+                sudo('pip install gunicorn')
 
-                with virtualenv(venv):
-                    with shell_env(DJANGO_SETTINGS_MODULE=settings_module):
-                        sudo('[[ -e requirements.txt ]] && pip install -qr requirements.txt')
+                if remote['server'].get('build_system', 'npm') == 'npm':
+                    sudo('. ~/.nvm/nvm.sh && yarn', shell='/bin/bash')
+                    sudo('. ~/.nvm/nvm.sh && yarn run build', shell='/bin/bash')
 
-            with virtualenv(venv):
-                with shell_env(DJANGO_SETTINGS_MODULE=settings_module):
-                    sudo('pip install -q gunicorn')
+                sudo('python manage.py collectstatic --noinput')
 
-                    if remote['server'].get('build_system', 'npm') == 'npm':
-                        sudo('. ~/.nvm/nvm.sh && yarn', shell='/bin/bash')
-                        sudo('. ~/.nvm/nvm.sh && yarn run build', shell='/bin/bash')
+                requirements = sudo('pip freeze')
+                compressor = False
+                watson = False
+                for line in requirements.split('\n'):
+                    if line.startswith('django-compressor'):
+                        compressor = True
+                    if line.startswith('django-watson'):
+                        watson = True
 
-                    sudo('python manage.py collectstatic --noinput')
+                if not compressor:
+                    sudo('python manage.py compileassets')
 
-                    requirements = sudo('pip freeze')
-                    compressor = False
-                    watson = False
-                    for line in requirements.split('\n'):
-                        if line.startswith('django-compressor'):
-                            compressor = True
-                        if line.startswith('django-watson'):
-                            watson = True
+                sudo('yes yes | python manage.py migrate')
 
-                    if not compressor:
-                        sudo('python manage.py compileassets')
+                if watson:
+                    sudo('python manage.py buildwatson')
 
-                    sudo('yes yes | python manage.py migrate')
-
-                    if watson:
-                        sudo('python manage.py buildwatson')
-
-        sudo("sudo su -c \"find /var/www/{project_folder}_static/ -type f \( -name '*.js' -o -name '*.css' -o -name '*.svg' \) -exec gzip -v -k -f --best {{}} \;\" {project_folder}".format(
-            project_folder=project_folder,
-        ))
-        sudo('supervisorctl restart all')
+        # Point the application to the new venv
+        sudo(f'ln -sf {new_venv} /var/www/{project_folder}/.venv')
+        sudo(f'supervisorctl signal HUP {project_folder}')
 
         # Register the release with Opbeat.
         if 'opbeat' in config and config['opbeat']['app_id'] and config['opbeat']['secret_token']:
