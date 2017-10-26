@@ -1,1 +1,1 @@
-56 3 * * * certbot renew --pre-hook "service nginx stop" --post-hook "service nginx start"
+56 3 * * * root certbot renew --pre-hook "service nginx stop" --post-hook "service nginx start"
