@@ -781,6 +781,10 @@ class Command(ServerManagementBaseCommand):
             "none": [],
             "npm": [
                 {
+                    'title': 'Create .bashrc file',
+                    'command': f'touch ~{project_folder}/.bashrc',
+                },
+                {
                     'title': 'Install nvm',
                     'command': 'cd /tmp; curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.32.1/install.sh'
                                ' | bash',
