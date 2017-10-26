@@ -567,46 +567,39 @@ class Command(ServerManagementBaseCommand):
             {
                 'title': 'Make the static directory',
                 'command': '; '.join([
-                    'mkdir -m 0775 -p {dir}',
-                    'chown {project}:webapps {dir}',
-                ]).format(
-                    project=project_folder,
-                    dir=django_settings.STATIC_ROOT,
-                ),
+                    f'mkdir -m 0775 -p {django_settings.STATIC_ROOT}',
+                    f'chown {project_folder}:webapps {django_settings.STATIC_ROOT}',
+                ]),
             },
             {
                 'title': 'Make the media directory',
                 'command': '; '.join([
-                    'mkdir -m 0775 -p {dir}',
-                    'chown {project}:webapps {dir}'
-                ]).format(
-                    project=project_folder,
-                    dir=django_settings.MEDIA_ROOT,
-                ),
+                    f'mkdir -m 0775 -p {django_settings.MEDIA_ROOT}',
+                    f'chown {project_folder}:webapps {django_settings.MEDIA_ROOT}'
+                ]),
             },
         ]
         run_tasks(env, static_tasks)
 
-        virtualenv_command = (
-            'virtualenv -p python{python_full} /var/www/{project}/.venv'
-        )
         # Define venv tasks
+        git_hash = run(f'cd /var/www/{project_folder}; git rev-parse --short HEAD')
+        venv_path = f'/var/www/{project_folder}/.venv-{git_hash}'
+
         venv_tasks = [
             {
-                'title': 'Create the virtualenv',
-                'command': virtualenv_command.format(
-                    python_full=python_version_full,
-                    project=project_folder,
-                ),
+                'title': 'Create the virtualenv for this commit',
+                'command': f'virtualenv -p python{python_version_full} {venv_path}',
+            },
+            {
+                'title': 'Symlink the .venv folder to the commit venv',
+                'command': f'ln -s {venv_path} /var/www/{project_folder}/.venv',
             },
             # This shouldn't be necessary (we think we upgraded pip earlier)
             # but it is - you'll get complaints about bdist_wheel without
             # this.
             {
                 'title': 'Upgrade pip inside the virtualenv',
-                'command': '/var/www/{project}/.venv/bin/pip install --upgrade pip'.format(
-                    project=project_folder,
-                ),
+                'command': f'/var/www/{project_folder}/.venv/bin/pip install --upgrade pip',
             },
         ]
         run_tasks(env, venv_tasks, user=project_folder)
@@ -615,15 +608,14 @@ class Command(ServerManagementBaseCommand):
             {
                 'title': 'Create the Gunicorn script file',
                 'fabric_command': 'put',
-                'fabric_args': [session_files['gunicorn_start'].name, '/var/www/{project}/gunicorn_start'.format(
-                    project=project_folder,
-                )],
+                'fabric_args': [
+                    session_files['gunicorn_start'].name,
+                    f'/var/www/{project_folder}/gunicorn_start',
+                ],
             },
             {
                 'title': 'Make the Gunicorn script file executable',
-                'command': 'chmod +x /var/www/{project}/gunicorn_start'.format(
-                    project=project_folder,
-                )
+                'command': f'chmod +x /var/www/{project_folder}/gunicorn_start',
             },
             {
                 'title': 'chown the Gunicorn script file',
@@ -639,9 +631,7 @@ class Command(ServerManagementBaseCommand):
                 'title': 'Create the application log file',
                 'command': '; '.join([
                     'touch /var/log/gunicorn_supervisor.log',
-                    'chown {}:webapps /var/log/gunicorn_supervisor.log'.format(
-                        project_folder,
-                    ),
+                    f'chown {project_folder}:webapps /var/log/gunicorn_supervisor.log',
                     'chmod 0644 /var/log/gunicorn_supervisor.log',
                 ]),
             },
@@ -662,9 +652,7 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': 'Make sure Gunicorn is installed',
-                'command': '/var/www/{project}/.venv/bin/pip install gunicorn'.format(
-                    project=project_folder,
-                ),
+                'command': f'/var/www/{project_folder}/.venv/bin/pip install gunicorn',
             },
         ]
 
@@ -679,9 +667,10 @@ class Command(ServerManagementBaseCommand):
             {
                 'title': 'Create the Nginx configuration file',
                 'fabric_command': 'put',
-                'fabric_args': [session_files['nginx_site_config'].name, '/etc/nginx/sites-available/{}'.format(
-                    project_folder,
-                )],
+                'fabric_args': [
+                    session_files['nginx_site_config'].name,
+                    f'/etc/nginx/sites-available/{project_folder}',
+                ],
             },
             {
                 'title': 'Create the .htpasswd file',
@@ -748,9 +737,10 @@ class Command(ServerManagementBaseCommand):
             {
                 'title': 'Create the Supervisor config file for the application',
                 'fabric_command': 'put',
-                'fabric_args': [session_files['supervisor_config'].name, '/etc/supervisor/conf.d/{}.conf'.format(
-                    project_folder,
-                )],
+                'fabric_args': [
+                    session_files['supervisor_config'].name,
+                    f'/etc/supervisor/conf.d/{project_folder}.conf',
+                ],
             },
             {
                 'title': 'Stopping memcached and removing from startup runlevels',
@@ -762,8 +752,10 @@ class Command(ServerManagementBaseCommand):
             {
                 'title': 'Create the Supervisor config file for memcached',
                 'fabric_command': 'put',
-                'fabric_args': [session_files['memcached_supervisor_config'].name,
-                                '/etc/supervisor/conf.d/memcached.conf'],
+                'fabric_args': [
+                    session_files['memcached_supervisor_config'].name,
+                    '/etc/supervisor/conf.d/memcached.conf',
+                ],
             },
             {
                 'title': 'Re-read the Supervisor config files',
@@ -804,8 +796,7 @@ class Command(ServerManagementBaseCommand):
                 },
                 {
                     'title': 'Ensure static folder exists in project',
-                    'command': 'if [ ! -d "/var/www/{project}/{project}/static/" ]; then mkdir /var/www/{project}/{'
-                               'project}/static/; fi'.format(
+                    'command': 'if [ ! -d "/var/www/{project}/{project}/static/" ]; then mkdir /var/www/{project}/{project}/static/; fi'.format(
                         project=project_folder,
                     ),
                 },
