@@ -38,14 +38,10 @@ class Command(ServerManagementBaseCommand):
         python_version = remote['server'].get('python_version', '3')
 
         # Change into the local project folder
-        with hide('output', 'running', 'warnings'):
-            with lcd(local_project_path):
-                project_folder = local("basename $( find {} -name 'wsgi.py' -not -path '*/.venv/*' -not -path '*/venv/*' | xargs -0 -n1 dirname )".format(
-                    local_project_path
-                ), capture=True)
+        with hide('output', 'running', 'warnings'), lcd(local_project_path):
+            project_folder = local(f"basename $( find {local_project_path} -name 'wsgi.py' -not -path '*/.venv/*' -not -path '*/venv/*' | xargs -0 -n1 dirname )", capture=True)
 
-        with settings(sudo_user=project_folder), cd('/var/www/{}'.format(project_folder)):
-            self.server_commit = run('git rev-parse --short HEAD')
+        with settings(sudo_user=project_folder), cd(f'/var/www/{project_folder}'):
             settings_module = '{}.settings.{}'.format(
                 project_folder,
                 remote['server'].get('settings_file', 'production'),

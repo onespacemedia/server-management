@@ -98,17 +98,17 @@ class Command(ServerManagementBaseCommand):
         setup_ssl_for = [
             domain_name
             for domain_name in domain_names.split(' ')
-            if local('dig +short {}'.format(domain_name), capture=True) == remote['server']['ip']
+            if local(f'dig +short {domain_name}', capture=True) == remote['server']['ip']
         ]
 
         if not setup_ssl_for:
-            abort("Sorry, it's $CURRENT_YEAR, you need to use SSL. Please update the domain DNS to point to {}.".format(
+            abort("None of the supplied domain names are pointing to the server IP, which means SSL cannot be configured (it's required). Please update the domain DNS to point to {}.".format(
                 remote['server']['ip']
             ))
 
         for domain_name in domain_names.split(' '):
             if domain_name not in setup_ssl_for:
-                print('SSL will not be configured for {}'.format(domain_name))
+                print(f'SSL will not be configured for {domain_name}')
 
         # Override username (for DO hosts).
         if env.user == 'deploy':
@@ -116,9 +116,9 @@ class Command(ServerManagementBaseCommand):
 
         # Print some information for the user
         print('')
-        print('Project: {}'.format(project_folder))
-        print('Server IP: {}'.format(env.host_string))
-        print('Server user: {}'.format(env.user))
+        print(f'Project: {project_folder}')
+        print(f'Server IP: {env.host_string}')
+        print(f'Server user: {env.user}')
         print('')
 
         # Get BitBucket / Github details
@@ -212,11 +212,16 @@ class Command(ServerManagementBaseCommand):
             optional_packages = config['optional_packages']
 
         python_version_full = remote['server'].get('python_version', '3')
-        python_version = python_version_full[0]
-        pip_command = 'pip{}'.format(3 if python_version == '3' else '')
-        python_command = 'python{}'.format(python_version_full)
+        python_version = 3
+        pip_command = 'pip3'
+        python_command = f'python{python_version_full}'
+
         # Define base tasks
         base_tasks = [
+            {
+                'title': 'Add Python 3.6 PPA',
+                'command': 'add-apt-repository -y ppa:jonathonf/python-3.6',
+            },
             # Add nginx and Let's Encrypt PPAs.  We add them up here because an
             # `apt-get update` is require for them to be truly added and that
             # comes next.
@@ -250,11 +255,10 @@ class Command(ServerManagementBaseCommand):
                         'ufw',  # Installed by default on Ubuntu, not elsewhere
 
                         # Project requirements
-                        '{}-dev'.format(python_command),
-                        'python{}-pip'.format('3' if python_version == '3' else ''),
+                        f'{python_command}-dev',
+                        'python3-pip',
                         'apache2-utils',  # Required for htpasswd
-                        'python{}-passlib'.format('3' if python_version == '3' else ''),  # Required for generating the htpasswd file
-                        'supervisor',
+                        'python3-passlib',  # Required for generating the htpasswd file
                         'libjpeg-dev',
                         'libffi-dev',
                         'libssl-dev',  # Required for nvm.
@@ -270,16 +274,16 @@ class Command(ServerManagementBaseCommand):
                         # Postgres requirements
                         'postgresql',
                         'libpq-dev',
-                        'python{}-psycopg2'.format(3 if python_version == '3' else ''),  # TODO: Is this required?
+                        'python3-psycopg2',  # TODO: Is this required?
 
                         # Required under Python 3.
-                        'python3-venv' if python_version == '3' else '',
+                        'python3-venv',
 
                         # Other
                         'libgeoip-dev' if optional_packages.get('geoip', True) else '',
                         'libmysqlclient-dev' if optional_packages.get('mysql', True) else '',
-                        'python3.6' if python_version_full == '3.6' else '',
-                        'python3.6-dev' if python_version_full == '3.6' else '',
+                        'python3.6',
+                        'python3.6-dev',
                     ])
                 )
             },
@@ -290,23 +294,21 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': 'Update pip',
-                'command': '{} install -U pip'.format(pip_command),
+                'command': f'{pip_command} install -U pip'
             },
             {
                 'title': 'Install virtualenv',
-                'command': '{} install virtualenv'.format(pip_command),
+                'command': f'{pip_command} install virtualenv',
+            },
+            {
+                'title': 'Install supervisor',
+                'command': f'{pip_command} install supervisor',
             },
             {
                 'title': 'Set the timezone to UTC',
                 'command': 'timedatectl set-timezone UTC',
             }
         ]
-
-        if python_version_full == '3.6':
-            base_tasks.insert(0, {
-                'title': 'Add Python 3.6 PPA',
-                'command': 'add-apt-repository -y ppa:jonathonf/python-3.6',
-            })
 
         run_tasks(env, base_tasks)
 
@@ -365,19 +367,15 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': 'Add the application user',
-                'command': 'adduser --shell /bin/bash --system --disabled-password --ingroup webapps {name}'.format(
-                    name=project_folder,
-                ),
+                'command': f'adduser --shell /bin/bash --system --disabled-password --ingroup webapps {project_folder}',
             },
             {
                 'title': "Add .ssh folder to application user's home directory",
-                'command': 'mkdir ~{}/.ssh'.format(project_folder),
+                'command': f'mkdir ~{project_folder}/.ssh',
             },
             {
                 'title': 'Generate SSH keys for application user',
-                'command': "ssh-keygen -C application-server -f ~{}/.ssh/id_rsa -N ''".format(
-                    project_folder,
-                )
+                'command': f"ssh-keygen -C application-server -f ~{project_folder}/.ssh/id_rsa -N ''",
             },
             {
                 'title': 'Make the application directory',
@@ -410,9 +408,7 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': 'Add authorized keys to deploy user',
-                'command': 'mv ~{}/.ssh/authorized_keys /home/deploy/.ssh/authorized_keys'.format(
-                    env.user,
-                ),
+                'command': f'mv ~{env.user}/.ssh/authorized_keys /home/deploy/.ssh/authorized_keys',
             },
             {
                 'title': 'Check deploy user file permissions',
@@ -451,41 +447,33 @@ class Command(ServerManagementBaseCommand):
         run_tasks(env, ssh_tasks)
 
         # Define db tasks
+        db_name = remote['database']['name']
+        db_user = remote['database']['user']
+
         db_tasks = [
             {
                 'title': 'Create the application postgres role',
-                'command': 'su - postgres -c "createuser {name}"'.format(
-                    name=remote['database']['name'],
-                ),
+                'command': f'su - postgres -c "createuser {db_name}"',
             },
             {
                 'title': 'Ensure database is created',
-                'command': 'su - postgres -c "createdb {name} --encoding=UTF-8 --locale=en_GB.UTF-8 '
-                           '--template=template0 --owner={owner} --no-password"'.format(
-                    name=remote['database']['name'],
-                    owner=remote['database']['user'],
-                ),
+                'command': f'su - postgres -c "createdb {db_name} --encoding=UTF-8 --locale=en_GB.UTF-8 '
+                           '--template=template0 --owner={db_user} --no-password"',
             },
             {
                 'title': 'Ensure user has access to the database',
-                'command': 'su - postgres -c "psql {name} -c \'GRANT ALL ON DATABASE {name} TO {owner}\'"'.format(
-                    name=remote['database']['name'],
-                    owner=remote['database']['user'],
-                ),
+                'command': f'su - postgres -c "psql {db_name} -c \'GRANT ALL ON DATABASE {db_name} TO {db_user}\'"',
             },
             {
                 'title': 'Ensure user does not have unnecessary privileges',
-                'command': 'su - postgres -c "psql {name} -c \'ALTER USER {owner} WITH NOSUPERUSER '
-                           'NOCREATEDB\'"'.format(
-                    name=remote['database']['name'],
-                    owner=remote['database']['user'],
-                ),
+                'command': f'su - postgres -c "psql {db_name} -c \'ALTER USER {db_user} WITH NOSUPERUSER '
+                           'NOCREATEDB\'"',
             },
         ]
         run_tasks(env, db_tasks)
 
         # Get SSH Key from server
-        ssh_key = run('cat ~{}/.ssh/id_rsa.pub'.format(project_folder))
+        ssh_key = run(f'cat ~{project_folder}/.ssh/id_rsa.pub')
 
         # Get the current SSH keys in the repo
         if is_bitbucket_repo:
@@ -516,7 +504,7 @@ class Command(ServerManagementBaseCommand):
                             bitbucket_repo,
                         ),
                         data=urlencode({
-                            'label': 'Application Server ({})'.format(env.host_string),
+                            'label': f'Application Server ({env.host_string})',
                             'key': ssh_key,
                         }),
                         auth=(bitbucket_username, bitbucket_password)
@@ -535,11 +523,11 @@ class Command(ServerManagementBaseCommand):
             try:
                 response = requests.post('https://api.github.com/repos/{}/{}/keys'.format(github_account, github_repo),
                                          json={
-                                             'title': 'Application Server ({})'.format(env.host_string),
+                                             'title': f'Application Server ({env.host_string})',
                                              'key': ssh_key,
                                              'read_only': True,
                                          }, headers={
-                        'Authorization': 'token {}'.format(github_token)
+                        'Authorization': f'token {github_token}'
                     })
 
                 if debug:
@@ -552,30 +540,21 @@ class Command(ServerManagementBaseCommand):
 
         # Define git tasks
         if is_bitbucket_repo:
-            git_url = 'git@bitbucket.org:{}/{}.git'.format(
-                bitbucket_account,
-                bitbucket_repo,
-            )
+            git_url = f'git@bitbucket.org:{bitbucket_account}/{bitbucket_repo}.git'
         elif is_github_repo:
-            git_url = 'git@github.com:{}/{}.git'.format(
-                github_account,
-                github_repo,
-            )
+            git_url = f'git@github.com:{github_account}/{github_repo}.git'
+
 
         git_tasks = [
             {
                 'title': 'Add Github key to known hosts',
-                'command': 'ssh-keyscan -H github.com >> ~{project}/.ssh/known_hosts'.format(
-                    project=project_folder,
-                ),
+                'command': f'ssh-keyscan -H github.com >> ~{project_folder}/.ssh/known_hosts',
             },
             {
                 'title': 'Setup the Git repo',
                 'command': 'cd /tmp; git clone {url} {project}'.format(
                     url=git_url,
-                    project='/var/www/{}'.format(
-                        project_folder,
-                    )
+                    project=f'/var/www/{project_folder}',
                 ),
             },
         ]
@@ -852,12 +831,8 @@ class Command(ServerManagementBaseCommand):
                 'title': 'Follow the project on CircleCI',
                 'fabric_command': 'local',
                 'fabric_args': [
-                    'curl -X POST https://circleci.com/api/v1.1/project/github/{github_account}/{'
-                    'github_repo}/follow?circle-token={circle_token}'.format(
-                        github_account=github_account,
-                        github_repo=github_repo,
-                        circle_token=circle_token,
-                    )]
+                    f'curl -X POST https://circleci.com/api/v1.1/project/github/{github_account}/{github_repo}/follow?circle-token={circle_token}',
+                ]
             },
             {
                 'title': 'Add private SSH key to CircleCI',
