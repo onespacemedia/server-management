@@ -872,7 +872,7 @@ class Command(ServerManagementBaseCommand):
             {
                 'title': 'Create the CircleCI SSH key',
                 'fabric_command': 'local',
-                'fabric_args': ['mkdir dist; ssh-keygen -C circleci -f dist/id_rsa -N '''],
+                'fabric_args': ["mkdir -p dist; ssh-keygen -C circleci -f dist/id_rsa -N ''"],
             },
             {
                 'title': 'Follow the project on CircleCI',
