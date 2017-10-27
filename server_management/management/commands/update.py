@@ -73,23 +73,35 @@ class Command(ServerManagementBaseCommand):
             git_changes = sudo(f'git diff --name-only {initial_git_hash} {new_git_hash}')
 
             if initial_git_hash == new_git_hash and not options['force_update']:
-                self.stdout.write('Server is up to date.')
+                print('Server is already up to date.')
                 exit()
 
-            # Check if we have PyPy
+            # Does the new venv folder already exist?
             with settings(warn_only=True):
-                result = run('test -x /usr/bin/pypy')
+                venv_folder = run(f'test -d {new_venv}')
 
             # Build the virtualenv.
-            if result.return_code == 0:
-                sudo(f'virtualenv -p /usr/bin/pypy {new_venv}')
-            else:
-                sudo(f'virtualenv -p python{python_version} {new_venv}')
+            if venv_folder.return_code == 0:
+                print('Using existing venv for this commit hash')
 
+            if venv_folder.return_code > 0:
+                print('Creating venv for this commit hash')
+
+                # Check if we have PyPy
+                with settings(warn_only=True):
+                    pypy = run('test -x /usr/bin/pypy')
+
+                if pypy.return_code == 0:
+                    sudo(f'virtualenv -p /usr/bin/pypy {new_venv}')
+                else:
+                    sudo(f'virtualenv -p python{python_version} {new_venv}')
+
+                with virtualenv(new_venv), shell_env(DJANGO_SETTINGS_MODULE=settings_module):
+                    sudo('[[ -e requirements.txt ]] && pip install -r requirements.txt')
+                    sudo('pip install gunicorn')
+
+            # Things which need to happen regardless of whether there was a venv already.
             with virtualenv(new_venv), shell_env(DJANGO_SETTINGS_MODULE=settings_module):
-                sudo('[[ -e requirements.txt ]] && pip install -r requirements.txt')
-                sudo('pip install gunicorn')
-
                 if remote['server'].get('build_system', 'npm') == 'npm':
                     sudo('. ~/.nvm/nvm.sh && yarn', shell='/bin/bash')
                     sudo('. ~/.nvm/nvm.sh && yarn run build', shell='/bin/bash')
