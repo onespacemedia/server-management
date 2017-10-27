@@ -15,6 +15,7 @@ from ._core import load_config, run_tasks, ServerManagementBaseCommand, title_pr
 
 
 class Command(ServerManagementBaseCommand):
+
     def handle(self, noinput, debug, remote='', *args, **options):
         # Load server config from project
         config, remote = load_config(env, remote, config_user='root', debug=debug)
@@ -154,7 +155,7 @@ class Command(ServerManagementBaseCommand):
         session_files = {
             'gunicorn_start': NamedTemporaryFile(mode='w+', delete=False),
             'supervisor_config': NamedTemporaryFile(mode='w+', delete=False),
-            'memcached_supervisor_config': NamedTemporaryFile(mode='w+', delete=False),
+            'supervisor_init': NamedTemporaryFile(mode='w+', delete=False),
             'nginx_production': NamedTemporaryFile(mode='w+', delete=False),
             'nginx_staging': NamedTemporaryFile(mode='w+', delete=False),
             'apt_periodic': NamedTemporaryFile(mode='w+', delete=False),
@@ -173,10 +174,10 @@ class Command(ServerManagementBaseCommand):
         }))
         session_files['supervisor_config'].close()
 
-        session_files['memcached_supervisor_config'].write(render_to_string('memcached_supervisor_config', {
+        session_files['supervisor_init'].write(render_to_string('supervisor_init', {
             'project': project_folder
         }))
-        session_files['memcached_supervisor_config'].close()
+        session_files['supervisor_init'].close()
 
         # Production nginx config
         session_files['nginx_production'].write(render_to_string('nginx_production', {
@@ -772,12 +773,36 @@ class Command(ServerManagementBaseCommand):
         # Define supervisor tasks
         supervisor_tasks = [
             {
-                'title': 'Create the Supervisor config file for the application',
+                'title': 'Create the Supervisor config folder',
+                'command': 'sudo mkdir /etc/supervisor',
+            },
+            {
+                'title': 'Create the Supervisor config file',
                 'fabric_command': 'put',
                 'fabric_args': [
                     session_files['supervisor_config'].name,
-                    f'/etc/supervisor/conf.d/{project_folder}.conf',
+                    '/etc/supervisor/supervisord.conf',
                 ],
+            },
+            {
+                'title': 'Create the Supervisor init script',
+                'fabric_command': 'put',
+                'fabric_args': [
+                    session_files['supervisor_init'].name,
+                    '/etc/init.d/supervisord',
+                ],
+            },
+            {
+                'title': 'Make the Supervisor init script executable',
+                'command': 'chmod +x /etc/init.d/supervisord',
+            },
+            {
+                'title': 'Add Supervisor to the list of services',
+                'command': 'update-rc.d supervisord defaults',
+            },
+            {
+                'title': 'Create supervisor log directory',
+                'command': 'mkdir -p /var/log/supervisor/',
             },
             {
                 'title': 'Stopping memcached and removing from startup runlevels',
@@ -787,20 +812,8 @@ class Command(ServerManagementBaseCommand):
                 ]),
             },
             {
-                'title': 'Create the Supervisor config file for memcached',
-                'fabric_command': 'put',
-                'fabric_args': [
-                    session_files['memcached_supervisor_config'].name,
-                    '/etc/supervisor/conf.d/memcached.conf',
-                ],
-            },
-            {
-                'title': 'Re-read the Supervisor config files',
-                'command': 'supervisorctl reread',
-            },
-            {
-                'title': 'Update Supervisor to add the app in the process group',
-                'command': 'supervisorctl update',
+                'title': 'Start Supervisor',
+                'command': 'service supervisord start',
             },
         ]
         run_tasks(env, supervisor_tasks)
