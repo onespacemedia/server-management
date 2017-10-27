@@ -10,9 +10,9 @@ class Command(ServerManagementBaseCommand):
     def __init__(self):
         super(Command, self).__init__()
 
-    def handle(self, *args, **options):
+    def handle(self, noinput, debug, remote='', *args, **options):
         # Load server config from project
-        load_config(env, options.get('remote', ''))
+        config, remote = load_config(env, remote, debug=debug)
 
         # Set local project path
         local_project_path = django_settings.SITE_ROOT

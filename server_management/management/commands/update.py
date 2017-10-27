@@ -25,9 +25,9 @@ class Command(ServerManagementBaseCommand):
             help='Force server to update, even if there are no changes detected.',
         )
 
-    def handle(self, *args, **options):
+    def handle(self, noinput, debug, remote='', *args, **options):
         # Load server config from project
-        config, remote = load_config(env, options.get('remote', ''))
+        config, remote = load_config(env, remote, debug=debug)
 
         # Set remote server name
         self.remote = config.get('remote_name')
