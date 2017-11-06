@@ -15,14 +15,13 @@ from ._core import load_config, run_tasks, ServerManagementBaseCommand, title_pr
 
 
 class Command(ServerManagementBaseCommand):
+
     def handle(self, noinput, debug, remote='', *args, **options):
         # Load server config from project
         config, remote = load_config(env, remote, config_user='root', debug=debug)
 
         # Set local project path
         local_project_path = django_settings.SITE_ROOT
-
-        print(os.getenv('DJANGO_SETTINGS_MODULE'))
 
         if django_settings.DEBUG:
             abort(
@@ -82,33 +81,44 @@ class Command(ServerManagementBaseCommand):
                         raise Exception("No requirements.txt")
 
         # Compress the domain names for nginx
-        domain_names = " ".join(django_settings.ALLOWED_HOSTS)
+        production_domain_names = ' '.join([
+            host for host in
+            django_settings.ALLOWED_HOSTS
+            if '.onespace.media' not in host
+        ])
+        staging_domain_names = ' '.join([
+            host for host in
+            django_settings.ALLOWED_HOSTS
+            if '.onespace.media' in host
+        ])
 
         # Use the site domain as a fallback domain
         fallback_domain_name = django_settings.SITE_DOMAIN
 
         if not noinput:
             fallback_domain_name = prompt('What should the default domain be?', default=fallback_domain_name)
-            domain_names = prompt('Which domains would you like to enable in nginx?', default=domain_names)
+            production_domain_names = prompt('Which domains would you like to enable in the PRODUCTION nginx config?', default=production_domain_names)
+            staging_domain_names = prompt('Which domains would you like to enable in the STAGING nginx config?', default=staging_domain_names)
         else:
             print('Default domain: ', fallback_domain_name)
-            print('Domains to be enabled in nginx: ', domain_names)
+            print('Production domains to be enabled in nginx: ', production_domain_names)
+            print('Staging domains to be enabled in nginx: ', staging_domain_names)
 
         # If the domain is pointing to the droplet already, we can setup SSL.
         setup_ssl_for = [
             domain_name
-            for domain_name in domain_names.split(' ')
-            if local('dig +short {}'.format(domain_name), capture=True) == remote['server']['ip']
+            for domain_name in staging_domain_names.split(' ')
+            if local(f'dig +short {domain_name}', capture=True) == remote['server']['ip']
         ]
 
         if not setup_ssl_for:
-            abort("Sorry, it's $CURRENT_YEAR, you need to use SSL. Please update the domain DNS to point to {}.".format(
+            abort("None of the supplied domain names are pointing to the server IP, which means SSL cannot be configured (it's required). Please update the domain DNS to point to {}.".format(
                 remote['server']['ip']
             ))
 
-        for domain_name in domain_names.split(' '):
+        for domain_name in staging_domain_names.split(' '):
             if domain_name not in setup_ssl_for:
-                print('SSL will not be configured for {}'.format(domain_name))
+                print(f'SSL will not be configured for {domain_name}')
 
         # Override username (for DO hosts).
         if env.user == 'deploy':
@@ -116,9 +126,9 @@ class Command(ServerManagementBaseCommand):
 
         # Print some information for the user
         print('')
-        print('Project: {}'.format(project_folder))
-        print('Server IP: {}'.format(env.host_string))
-        print('Server user: {}'.format(env.user))
+        print(f'Project: {project_folder}')
+        print(f'Server IP: {env.host_string}')
+        print(f'Server user: {env.user}')
         print('')
 
         # Get BitBucket / Github details
@@ -137,7 +147,7 @@ class Command(ServerManagementBaseCommand):
                 github_token = prompt(
                     'Please enter your Github token (obtained from https://github.com/settings/tokens):')
 
-        circle_token = os.environ.get('CIRCLE_TOKEN', None)
+        circle_token = os.environ.get('CIRCLE_TOKEN', '')
 
         print("")
 
@@ -145,8 +155,9 @@ class Command(ServerManagementBaseCommand):
         session_files = {
             'gunicorn_start': NamedTemporaryFile(mode='w+', delete=False),
             'supervisor_config': NamedTemporaryFile(mode='w+', delete=False),
-            'memcached_supervisor_config': NamedTemporaryFile(mode='w+', delete=False),
-            'nginx_site_config': NamedTemporaryFile(mode='w+', delete=False),
+            'supervisor_init': NamedTemporaryFile(mode='w+', delete=False),
+            'nginx_production': NamedTemporaryFile(mode='w+', delete=False),
+            'nginx_staging': NamedTemporaryFile(mode='w+', delete=False),
             'apt_periodic': NamedTemporaryFile(mode='w+', delete=False),
             'certbot_cronjob': NamedTemporaryFile(mode='w+', delete=False),
         }
@@ -163,17 +174,26 @@ class Command(ServerManagementBaseCommand):
         }))
         session_files['supervisor_config'].close()
 
-        session_files['memcached_supervisor_config'].write(render_to_string('memcached_supervisor_config', {
+        session_files['supervisor_init'].write(render_to_string('supervisor_init', {
             'project': project_folder
         }))
-        session_files['memcached_supervisor_config'].close()
+        session_files['supervisor_init'].close()
 
-        session_files['nginx_site_config'].write(render_to_string('nginx_site_config', {
+        # Production nginx config
+        session_files['nginx_production'].write(render_to_string('nginx_production', {
             'project': project_folder,
-            'domain_names': domain_names,
+            'domain_names': production_domain_names,
             'fallback_domain_name': fallback_domain_name
         }))
-        session_files['nginx_site_config'].close()
+        session_files['nginx_production'].close()
+
+        # Staging nginx config
+        session_files['nginx_staging'].write(render_to_string('nginx_staging', {
+            'project': project_folder,
+            'domain_names': staging_domain_names,
+            'fallback_domain_name': fallback_domain_name
+        }))
+        session_files['nginx_staging'].close()
 
         session_files['apt_periodic'].write(render_to_string('apt_periodic'))
         session_files['apt_periodic'].close()
@@ -212,11 +232,16 @@ class Command(ServerManagementBaseCommand):
             optional_packages = config['optional_packages']
 
         python_version_full = remote['server'].get('python_version', '3')
-        python_version = python_version_full[0]
-        pip_command = 'pip{}'.format(3 if python_version == '3' else '')
-        python_command = 'python{}'.format(python_version_full)
+        python_version = 3
+        pip_command = 'pip3'
+        python_command = f'python{python_version_full}'
+
         # Define base tasks
         base_tasks = [
+            {
+                'title': 'Add Python 3.6 PPA',
+                'command': 'add-apt-repository -y ppa:jonathonf/python-3.6',
+            },
             # Add nginx and Let's Encrypt PPAs.  We add them up here because an
             # `apt-get update` is require for them to be truly added and that
             # comes next.
@@ -234,7 +259,7 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': 'Upgrade everything',
-                'command': 'apt-get upgrade -y',
+                'command': 'apt-get upgrade -yq',
             },
             {
                 'title': 'Install unattended-upgrades',
@@ -250,11 +275,11 @@ class Command(ServerManagementBaseCommand):
                         'ufw',  # Installed by default on Ubuntu, not elsewhere
 
                         # Project requirements
-                        '{}-dev'.format(python_command),
-                        'python{}-pip'.format('3' if python_version == '3' else ''),
+                        f'{python_command}-dev',
+                        'python-pip',  # For supervisor
+                        'python3-pip',
                         'apache2-utils',  # Required for htpasswd
-                        'python{}-passlib'.format('3' if python_version == '3' else ''),  # Required for generating the htpasswd file
-                        'supervisor',
+                        'python3-passlib',  # Required for generating the htpasswd file
                         'libjpeg-dev',
                         'libffi-dev',
                         'libssl-dev',  # Required for nvm.
@@ -270,16 +295,16 @@ class Command(ServerManagementBaseCommand):
                         # Postgres requirements
                         'postgresql',
                         'libpq-dev',
-                        'python{}-psycopg2'.format(3 if python_version == '3' else ''),  # TODO: Is this required?
+                        'python3-psycopg2',  # TODO: Is this required?
 
                         # Required under Python 3.
-                        'python3-venv' if python_version == '3' else '',
+                        'python3-venv',
 
                         # Other
                         'libgeoip-dev' if optional_packages.get('geoip', True) else '',
                         'libmysqlclient-dev' if optional_packages.get('mysql', True) else '',
-                        'python3.6' if python_version_full == '3.6' else '',
-                        'python3.6-dev' if python_version_full == '3.6' else '',
+                        'python3.6',
+                        'python3.6-dev',
                     ])
                 )
             },
@@ -290,23 +315,21 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': 'Update pip',
-                'command': '{} install -U pip'.format(pip_command),
+                'command': f'{pip_command} install -U pip'
             },
             {
                 'title': 'Install virtualenv',
-                'command': '{} install virtualenv'.format(pip_command),
+                'command': f'{pip_command} install virtualenv',
+            },
+            {
+                'title': 'Install supervisor',
+                'command': f'pip2 install supervisor',
             },
             {
                 'title': 'Set the timezone to UTC',
                 'command': 'timedatectl set-timezone UTC',
             }
         ]
-
-        if python_version_full == '3.6':
-            base_tasks.insert(0, {
-                'title': 'Add Python 3.6 PPA',
-                'command': 'add-apt-repository -y ppa:jonathonf/python-3.6',
-            })
 
         run_tasks(env, base_tasks)
 
@@ -365,19 +388,15 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': 'Add the application user',
-                'command': 'adduser --shell /bin/bash --system --disabled-password --ingroup webapps {name}'.format(
-                    name=project_folder,
-                ),
+                'command': f'adduser --shell /bin/bash --system --disabled-password --ingroup webapps {project_folder}',
             },
             {
                 'title': "Add .ssh folder to application user's home directory",
-                'command': 'mkdir ~{}/.ssh'.format(project_folder),
+                'command': f'mkdir ~{project_folder}/.ssh',
             },
             {
                 'title': 'Generate SSH keys for application user',
-                'command': "ssh-keygen -C application-server -f ~{}/.ssh/id_rsa -N ''".format(
-                    project_folder,
-                )
+                'command': f"ssh-keygen -C application-server -f ~{project_folder}/.ssh/id_rsa -N ''",
             },
             {
                 'title': 'Make the application directory',
@@ -410,9 +429,7 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': 'Add authorized keys to deploy user',
-                'command': 'mv ~{}/.ssh/authorized_keys /home/deploy/.ssh/authorized_keys'.format(
-                    env.user,
-                ),
+                'command': f'mv ~{env.user}/.ssh/authorized_keys /home/deploy/.ssh/authorized_keys',
             },
             {
                 'title': 'Check deploy user file permissions',
@@ -451,41 +468,32 @@ class Command(ServerManagementBaseCommand):
         run_tasks(env, ssh_tasks)
 
         # Define db tasks
+        db_name = remote['database']['name']
+        db_user = remote['database']['user']
+
         db_tasks = [
             {
                 'title': 'Create the application postgres role',
-                'command': 'su - postgres -c "createuser {name}"'.format(
-                    name=remote['database']['name'],
-                ),
+                'command': f'su - postgres -c "createuser {db_name}"',
             },
             {
                 'title': 'Ensure database is created',
-                'command': 'su - postgres -c "createdb {name} --encoding=UTF-8 --locale=en_GB.UTF-8 '
-                           '--template=template0 --owner={owner} --no-password"'.format(
-                    name=remote['database']['name'],
-                    owner=remote['database']['user'],
-                ),
+                'command': f'su - postgres -c "createdb {db_name} --encoding=UTF-8 --locale=en_GB.UTF-8 --template=template0 --owner={db_user} --no-password"',
             },
             {
                 'title': 'Ensure user has access to the database',
-                'command': 'su - postgres -c "psql {name} -c \'GRANT ALL ON DATABASE {name} TO {owner}\'"'.format(
-                    name=remote['database']['name'],
-                    owner=remote['database']['user'],
-                ),
+                'command': f'su - postgres -c "psql {db_name} -c \'GRANT ALL ON DATABASE {db_name} TO {db_user}\'"',
             },
             {
                 'title': 'Ensure user does not have unnecessary privileges',
-                'command': 'su - postgres -c "psql {name} -c \'ALTER USER {owner} WITH NOSUPERUSER '
-                           'NOCREATEDB\'"'.format(
-                    name=remote['database']['name'],
-                    owner=remote['database']['user'],
-                ),
+                'command': f'su - postgres -c "psql {db_name} -c \'ALTER USER {db_user} WITH NOSUPERUSER '
+                'NOCREATEDB\'"',
             },
         ]
         run_tasks(env, db_tasks)
 
         # Get SSH Key from server
-        ssh_key = run('cat ~{}/.ssh/id_rsa.pub'.format(project_folder))
+        ssh_key = run(f'cat ~{project_folder}/.ssh/id_rsa.pub')
 
         # Get the current SSH keys in the repo
         if is_bitbucket_repo:
@@ -516,7 +524,7 @@ class Command(ServerManagementBaseCommand):
                             bitbucket_repo,
                         ),
                         data=urlencode({
-                            'label': 'Application Server ({})'.format(env.host_string),
+                            'label': f'Application Server ({env.host_string})',
                             'key': ssh_key,
                         }),
                         auth=(bitbucket_username, bitbucket_password)
@@ -533,13 +541,15 @@ class Command(ServerManagementBaseCommand):
             title_print(task_title, state='task')
 
             try:
-                response = requests.post('https://api.github.com/repos/{}/{}/keys'.format(github_account, github_repo),
-                                         json={
-                                             'title': 'Application Server ({})'.format(env.host_string),
-                                             'key': ssh_key,
-                                             'read_only': True,
-                                         }, headers={
-                        'Authorization': 'token {}'.format(github_token)
+                response = requests.post(
+                    f'https://api.github.com/repos/{github_account}/{github_repo}/keys',
+                    json={
+                        'title': f'Application Server ({env.host_string})',
+                        'key': ssh_key,
+                        'read_only': True,
+                    },
+                    headers={
+                        'Authorization': f'token {github_token}',
                     })
 
                 if debug:
@@ -552,30 +562,23 @@ class Command(ServerManagementBaseCommand):
 
         # Define git tasks
         if is_bitbucket_repo:
-            git_url = 'git@bitbucket.org:{}/{}.git'.format(
-                bitbucket_account,
-                bitbucket_repo,
-            )
+            git_url = f'git@bitbucket.org:{bitbucket_account}/{bitbucket_repo}.git'
         elif is_github_repo:
-            git_url = 'git@github.com:{}/{}.git'.format(
-                github_account,
-                github_repo,
-            )
+            git_url = f'git@github.com:{github_account}/{github_repo}.git'
+
+        git_branch = local('git symbolic-ref --short HEAD', capture=True)
 
         git_tasks = [
             {
                 'title': 'Add Github key to known hosts',
-                'command': 'ssh-keyscan -H github.com >> ~{project}/.ssh/known_hosts'.format(
-                    project=project_folder,
-                ),
+                'command': f'ssh-keyscan -H github.com >> ~{project_folder}/.ssh/known_hosts',
             },
             {
                 'title': 'Setup the Git repo',
-                'command': 'cd /tmp; git clone {url} {project}'.format(
+                'command': 'cd /tmp; git clone -b {branch} {url} {project}'.format(
+                    branch=git_branch,
                     url=git_url,
-                    project='/var/www/{}'.format(
-                        project_folder,
-                    )
+                    project=f'/var/www/{project_folder}',
                 ),
             },
         ]
@@ -586,46 +589,39 @@ class Command(ServerManagementBaseCommand):
             {
                 'title': 'Make the static directory',
                 'command': '; '.join([
-                    'mkdir -m 0775 -p {dir}',
-                    'chown {project}:webapps {dir}',
-                ]).format(
-                    project=project_folder,
-                    dir=django_settings.STATIC_ROOT,
-                ),
+                    f'mkdir -m 0775 -p {django_settings.STATIC_ROOT}',
+                    f'chown {project_folder}:webapps {django_settings.STATIC_ROOT}',
+                ]),
             },
             {
                 'title': 'Make the media directory',
                 'command': '; '.join([
-                    'mkdir -m 0775 -p {dir}',
-                    'chown {project}:webapps {dir}'
-                ]).format(
-                    project=project_folder,
-                    dir=django_settings.MEDIA_ROOT,
-                ),
+                    f'mkdir -m 0775 -p {django_settings.MEDIA_ROOT}',
+                    f'chown {project_folder}:webapps {django_settings.MEDIA_ROOT}'
+                ]),
             },
         ]
         run_tasks(env, static_tasks)
 
-        virtualenv_command = (
-            'virtualenv -p python{python_full} /var/www/{project}/.venv'
-        )
         # Define venv tasks
+        git_hash = run(f'cd /var/www/{project_folder}; git rev-parse --short HEAD')
+        venv_path = f'/var/www/{project_folder}/.venv-{git_hash}'
+
         venv_tasks = [
             {
-                'title': 'Create the virtualenv',
-                'command': virtualenv_command.format(
-                    python_full=python_version_full,
-                    project=project_folder,
-                ),
+                'title': 'Create the virtualenv for this commit',
+                'command': f'virtualenv -p python{python_version_full} {venv_path}',
+            },
+            {
+                'title': 'Symlink the .venv folder to the commit venv',
+                'command': f'ln -s {venv_path} /var/www/{project_folder}/.venv',
             },
             # This shouldn't be necessary (we think we upgraded pip earlier)
             # but it is - you'll get complaints about bdist_wheel without
             # this.
             {
                 'title': 'Upgrade pip inside the virtualenv',
-                'command': '/var/www/{project}/.venv/bin/pip install --upgrade pip'.format(
-                    project=project_folder,
-                ),
+                'command': f'/var/www/{project_folder}/.venv/bin/pip install --upgrade pip',
             },
         ]
         run_tasks(env, venv_tasks, user=project_folder)
@@ -634,15 +630,14 @@ class Command(ServerManagementBaseCommand):
             {
                 'title': 'Create the Gunicorn script file',
                 'fabric_command': 'put',
-                'fabric_args': [session_files['gunicorn_start'].name, '/var/www/{project}/gunicorn_start'.format(
-                    project=project_folder,
-                )],
+                'fabric_args': [
+                    session_files['gunicorn_start'].name,
+                    f'/var/www/{project_folder}/gunicorn_start',
+                ],
             },
             {
                 'title': 'Make the Gunicorn script file executable',
-                'command': 'chmod +x /var/www/{project}/gunicorn_start'.format(
-                    project=project_folder,
-                )
+                'command': f'chmod +x /var/www/{project_folder}/gunicorn_start',
             },
             {
                 'title': 'chown the Gunicorn script file',
@@ -658,9 +653,7 @@ class Command(ServerManagementBaseCommand):
                 'title': 'Create the application log file',
                 'command': '; '.join([
                     'touch /var/log/gunicorn_supervisor.log',
-                    'chown {}:webapps /var/log/gunicorn_supervisor.log'.format(
-                        project_folder,
-                    ),
+                    f'chown {project_folder}:webapps /var/log/gunicorn_supervisor.log',
                     'chmod 0644 /var/log/gunicorn_supervisor.log',
                 ]),
             },
@@ -673,17 +666,17 @@ class Command(ServerManagementBaseCommand):
                 # it at the start of the deployment process, it hasn't necessarily been
                 # committed. So this check covers that.
 
+                # We cd to /tmp/ because git lines in the requirements files breaks things.
+
                 'title': "Install packages required by the Django app inside virtualenv",
-                'command': 'if [ -f /var/www/{project}/requirements.txt ]; then /var/www/{project}/.venv/bin/pip '
+                'command': 'if [ -f /var/www/{project}/requirements.txt ]; then cd /tmp; /var/www/{project}/.venv/bin/pip '
                            'install -r /var/www/{project}/requirements.txt; fi'.format(
-                    project=project_folder,
-                ),
+                               project=project_folder,
+                           ),
             },
             {
                 'title': 'Make sure Gunicorn is installed',
-                'command': '/var/www/{project}/.venv/bin/pip install gunicorn'.format(
-                    project=project_folder,
-                ),
+                'command': f'/var/www/{project_folder}/.venv/bin/pip install gunicorn',
             },
         ]
 
@@ -696,11 +689,20 @@ class Command(ServerManagementBaseCommand):
                 'command': 'service nginx stop',
             },
             {
-                'title': 'Create the Nginx configuration file',
+                'title': 'Create the production Nginx configuration file',
                 'fabric_command': 'put',
-                'fabric_args': [session_files['nginx_site_config'].name, '/etc/nginx/sites-available/{}'.format(
-                    project_folder,
-                )],
+                'fabric_args': [
+                    session_files['nginx_production'].name,
+                    f'/etc/nginx/sites-available/{project_folder}_production',
+                ],
+            },
+            {
+                'title': 'Create the staging Nginx configuration file',
+                'fabric_command': 'put',
+                'fabric_args': [
+                    session_files['nginx_staging'].name,
+                    f'/etc/nginx/sites-available/{project_folder}_staging',
+                ],
             },
             {
                 'title': 'Create the .htpasswd file',
@@ -711,8 +713,14 @@ class Command(ServerManagementBaseCommand):
                 'command': 'rm /etc/nginx/sites-enabled/default',
             },
             {
-                'title': 'Ensure that the application site is enabled',
-                'command': 'ln -s /etc/nginx/sites-available/{project} /etc/nginx/sites-enabled/{project}'.format(
+                'title': 'Ensure that the production Nginx config is enabled',
+                'command': 'ln -s /etc/nginx/sites-available/{project}_production /etc/nginx/sites-enabled/{project}_production'.format(
+                    project=project_folder,
+                ),
+            },
+            {
+                'title': 'Ensure that the staging Nginx config is enabled',
+                'command': 'ln -s /etc/nginx/sites-available/{project}_staging /etc/nginx/sites-enabled/{project}_staging'.format(
                     project=project_folder,
                 ),
             },
@@ -720,9 +728,9 @@ class Command(ServerManagementBaseCommand):
                 'title': 'Run certbot',
                 'command': 'certbot certonly --standalone -n --agree-tos --email developers@onespacemedia.com '
                            '--cert-name {} --domains {}'.format(
-                    fallback_domain_name,
-                    ','.join(setup_ssl_for)
-                ),
+                               fallback_domain_name,
+                               ','.join(setup_ssl_for)
+                           ),
             },
             {
                 'title': 'Generate DH parameters (this may take a little while)',
@@ -765,11 +773,36 @@ class Command(ServerManagementBaseCommand):
         # Define supervisor tasks
         supervisor_tasks = [
             {
-                'title': 'Create the Supervisor config file for the application',
+                'title': 'Create the Supervisor config folder',
+                'command': 'sudo mkdir /etc/supervisor',
+            },
+            {
+                'title': 'Create the Supervisor config file',
                 'fabric_command': 'put',
-                'fabric_args': [session_files['supervisor_config'].name, '/etc/supervisor/conf.d/{}.conf'.format(
-                    project_folder,
-                )],
+                'fabric_args': [
+                    session_files['supervisor_config'].name,
+                    '/etc/supervisor/supervisord.conf',
+                ],
+            },
+            {
+                'title': 'Create the Supervisor init script',
+                'fabric_command': 'put',
+                'fabric_args': [
+                    session_files['supervisor_init'].name,
+                    '/etc/init.d/supervisord',
+                ],
+            },
+            {
+                'title': 'Make the Supervisor init script executable',
+                'command': 'chmod +x /etc/init.d/supervisord',
+            },
+            {
+                'title': 'Add Supervisor to the list of services',
+                'command': 'update-rc.d supervisord defaults',
+            },
+            {
+                'title': 'Create supervisor log directory',
+                'command': 'mkdir -p /var/log/supervisor/',
             },
             {
                 'title': 'Stopping memcached and removing from startup runlevels',
@@ -779,18 +812,8 @@ class Command(ServerManagementBaseCommand):
                 ]),
             },
             {
-                'title': 'Create the Supervisor config file for memcached',
-                'fabric_command': 'put',
-                'fabric_args': [session_files['memcached_supervisor_config'].name,
-                                '/etc/supervisor/conf.d/memcached.conf'],
-            },
-            {
-                'title': 'Re-read the Supervisor config files',
-                'command': 'supervisorctl reread',
-            },
-            {
-                'title': 'Update Supervisor to add the app in the process group',
-                'command': 'supervisorctl update',
+                'title': 'Start Supervisor',
+                'command': 'service supervisord start',
             },
         ]
         run_tasks(env, supervisor_tasks)
@@ -799,6 +822,10 @@ class Command(ServerManagementBaseCommand):
         build_systems = {
             "none": [],
             "npm": [
+                {
+                    'title': 'Create .bashrc file',
+                    'command': f'touch ~{project_folder}/.bashrc',
+                },
                 {
                     'title': 'Install nvm',
                     'command': 'cd /tmp; curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.32.1/install.sh'
@@ -819,8 +846,7 @@ class Command(ServerManagementBaseCommand):
                 },
                 {
                     'title': 'Ensure static folder exists in project',
-                    'command': 'if [ ! -d "/var/www/{project}/{project}/static/" ]; then mkdir /var/www/{project}/{'
-                               'project}/static/; fi'.format(
+                    'command': 'if [ ! -d "/var/www/{project}/{project}/static/" ]; then mkdir /var/www/{project}/{project}/static/; fi'.format(
                         project=project_folder,
                     ),
                 },
@@ -828,9 +854,9 @@ class Command(ServerManagementBaseCommand):
                     'title': 'Collect static files',
                     'command': '/var/www/{project}/.venv/bin/python /var/www/{project}/manage.py collectstatic '
                                '--noinput --link --settings={project}.settings.{settings}'.format(
-                        project=project_folder,
-                        settings=remote['server'].get('settings_file', 'production'),
-                    ),
+                                   project=project_folder,
+                                   settings=remote['server'].get('settings_file', 'production'),
+                               ),
                 }
             ]
         }
@@ -846,18 +872,14 @@ class Command(ServerManagementBaseCommand):
             {
                 'title': 'Create the CircleCI SSH key',
                 'fabric_command': 'local',
-                'fabric_args': ['mkdir dist; ssh-keygen -C circleci -f dist/id_rsa -N '''],
+                'fabric_args': ["mkdir -p dist; ssh-keygen -C circleci -f dist/id_rsa -N ''"],
             },
             {
                 'title': 'Follow the project on CircleCI',
                 'fabric_command': 'local',
                 'fabric_args': [
-                    'curl -X POST https://circleci.com/api/v1.1/project/github/{github_account}/{'
-                    'github_repo}/follow?circle-token={circle_token}'.format(
-                        github_account=github_account,
-                        github_repo=github_repo,
-                        circle_token=circle_token,
-                    )]
+                    f'curl -X POST https://circleci.com/api/v1.1/project/github/{github_account}/{github_repo}/follow?circle-token={circle_token}',
+                ]
             },
             {
                 'title': 'Add private SSH key to CircleCI',

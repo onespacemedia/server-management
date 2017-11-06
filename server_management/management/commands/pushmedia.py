@@ -10,9 +10,9 @@ class Command(ServerManagementBaseCommand):
     def __init__(self):
         super(Command, self).__init__()
 
-    def handle(self, *args, **options):
+    def handle(self, noinput, debug, remote='', *args, **options):
         # Load server config from project
-        load_config(env, options.get('remote', ''))
+        config, remote = load_config(env, remote, debug=debug)
 
         # Set local project path
         local_project_path = django_settings.SITE_ROOT
@@ -26,7 +26,8 @@ class Command(ServerManagementBaseCommand):
                     ), capture=True)
 
         with settings(warn_only=True):
-            local('rsync --progress -O -av{} {}/ {}@{}:/var/www/{}_media/'.format(
+            local('rsync --rsync-path="sudo -u {} rsync" --progress -O -av{} {}/ {}@{}:/var/www/{}_media/'.format(
+                project_folder,
                 ' ' if not getattr(env, 'key_filename') else ' -e "ssh -i {}"'.format(
                     os.path.expanduser(env.key_filename),  # Fixes an rsync bug with ~ paths.
                 ),
