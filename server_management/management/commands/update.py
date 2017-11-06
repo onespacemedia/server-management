@@ -108,22 +108,13 @@ class Command(ServerManagementBaseCommand):
 
                 sudo('python manage.py collectstatic --noinput')
 
-                requirements = sudo('pip freeze')
-                compressor = False
-                watson = False
-                for line in requirements.split('\n'):
-                    if line.startswith('django-compressor'):
-                        compressor = True
-                    if line.startswith('django-watson'):
-                        watson = True
-
-                if not compressor:
-                    sudo('python manage.py compileassets')
-
                 sudo('yes yes | python manage.py migrate')
 
-                if watson:
-                    sudo('python manage.py buildwatson')
+                requirements = sudo('pip freeze')
+
+                for line in requirements.split('\n'):
+                    if line.startswith('django-watson'):
+                        sudo('python manage.py buildwatson')
 
         # Point the application to the new venv
         sudo(f'ln -sf {new_venv} /var/www/{project_folder}/.venv')
