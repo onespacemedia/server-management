@@ -106,7 +106,7 @@ class Command(ServerManagementBaseCommand):
                     sudo('. ~/.nvm/nvm.sh && yarn', shell='/bin/bash')
                     sudo('. ~/.nvm/nvm.sh && yarn run build', shell='/bin/bash')
 
-                sudo('python manage.py collectstatic --noinput')
+                sudo('python manage.py collectstatic --noinput -l')
 
                 sudo('yes yes | python manage.py migrate')
 
