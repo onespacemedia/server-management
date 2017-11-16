@@ -1,24 +1,30 @@
 from __future__ import print_function
 
-from getpass import getpass
 import os
 import re
+from getpass import getpass
 from urllib.parse import urlencode
 
+import requests
 from django.conf import settings as django_settings
 from django.core.files.temp import NamedTemporaryFile
 from django.template.loader import render_to_string
-from fabric.api import abort, env, hide, local, lcd, prompt, run, settings
-import requests
+from fabric.api import abort, env, hide, lcd, local, prompt, run, settings
 
-from ._core import load_config, run_tasks, ServerManagementBaseCommand, title_print
+from ._core import (ServerManagementBaseCommand, load_config, run_tasks,
+                    title_print)
 
 
 class Command(ServerManagementBaseCommand):
 
-    def handle(self, noinput, debug, remote='', *args, **options):
+    # This is a complicated method which is vastly overloaded.  To improve it in
+    # the future we could look to moving each individual block of actions into
+    # either their own methods, or into their own files, which are then registered
+    # with the deployment system.
+
+    def handle(self, *args, **options):  # pylint: disable=too-complex,too-many-locals,too-many-branches,too-many-statements
         # Load server config from project
-        config, remote = load_config(env, remote, config_user='root', debug=debug)
+        config, remote = load_config(env, options.get('remote', ''), config_user='root', debug=options.get('debug', False))
 
         # Set local project path
         local_project_path = django_settings.SITE_ROOT
@@ -95,7 +101,7 @@ class Command(ServerManagementBaseCommand):
         # Use the site domain as a fallback domain
         fallback_domain_name = django_settings.SITE_DOMAIN
 
-        if not noinput:
+        if not options.get('noinput', False):
             fallback_domain_name = prompt('What should the default domain be?', default=fallback_domain_name)
             production_domain_names = prompt('Which domains would you like to enable in the PRODUCTION nginx config?', default=production_domain_names)
             staging_domain_names = prompt('Which domains would you like to enable in the STAGING nginx config?', default=staging_domain_names)
@@ -232,7 +238,6 @@ class Command(ServerManagementBaseCommand):
             optional_packages = config['optional_packages']
 
         python_version_full = remote['server'].get('python_version', '3')
-        python_version = 3
         pip_command = 'pip3'
         python_command = f'python{python_version_full}'
 
@@ -486,8 +491,7 @@ class Command(ServerManagementBaseCommand):
             },
             {
                 'title': 'Ensure user does not have unnecessary privileges',
-                'command': f'su - postgres -c "psql {db_name} -c \'ALTER USER {db_user} WITH NOSUPERUSER '
-                'NOCREATEDB\'"',
+                'command': f'su - postgres -c "psql {db_name} -c \'ALTER USER {db_user} WITH NOSUPERUSER NOCREATEDB\'"',
             },
         ]
         run_tasks(env, db_tasks)
@@ -506,7 +510,7 @@ class Command(ServerManagementBaseCommand):
                     bitbucket_account,
                     bitbucket_repo,
                 ), auth=(bitbucket_username, bitbucket_password))
-            except:
+            except requests.RequestException:
                 title_print(task_title, state='failed')
                 exit()
 
@@ -552,7 +556,7 @@ class Command(ServerManagementBaseCommand):
                         'Authorization': f'token {github_token}',
                     })
 
-                if debug:
+                if options.get('debug', False):
                     print(response.text)
             except Exception as e:
                 title_print(task_title, state='failed')

@@ -1,0 +1,28 @@
+machine:
+  node:
+    version: 8.9.0
+  python:
+    version: 3.6.2
+
+dependencies:
+  override:
+    - pip install -e .[testing]
+
+test:
+  override:
+    - pylint server_management/ --load-plugins pylint_django,pylint_mccabe --ignore=migrations,tests -d missing-docstring,invalid-name,no-init,too-many-ancestors,no-member,line-too-long,attribute-defined-outside-init,too-few-public-methods,no-self-use,unused-argument,protected-access,locally-disabled,duplicate-code,ungrouped-imports,not-context-manager,fixme --reports=n
+    - isort --check-only --diff --quiet --skip-glob=.venv
+    # - pytest --cov=server_management
+  post:
+    - coveralls
+
+deployment:
+  release:
+      tag: /.*?/
+      commands:
+        - python3 -m venv venv; . venv/bin/activate; python setup.py verify
+        - echo -e "[pypi]\nusername = onespacemedia\npassword = $PYPI_PASSWORD" >> ~/.pypirc
+        - if [ -d dist ]; then rm -rf dist/; fi
+        - python setup.py sdist bdist_wheel
+        - pip install twine
+        - twine upload dist/*

@@ -1,13 +1,9 @@
-import datetime
-import json
-import os
-import sys
-import requests
 from django.conf import settings as django_settings
-from fabric.api import sudo, run, hide, lcd, settings, shell_env, cd, local, env
+from fabric.api import (cd, env, hide, lcd, local, run, settings, shell_env,
+                        sudo)
 from fabvenv import virtualenv
 
-from ._core import load_config, ServerManagementBaseCommand
+from ._core import ServerManagementBaseCommand, load_config
 
 
 class Command(ServerManagementBaseCommand):
@@ -25,9 +21,14 @@ class Command(ServerManagementBaseCommand):
             help='Force server to update, even if there are no changes detected.',
         )
 
-    def handle(self, noinput, debug, remote='', *args, **options):
+    # DS: I've had a look through this method to see if we can strip it down any
+    # further to make pylint happy, but everything which is here is for a reason.
+    # It either provides different build environments to be used, or handles
+    # different situations on the server. Hard to see where we could reduce code.
+
+    def handle(self, *args, **options):  # pylint: disable=too-many-locals,too-many-statements
         # Load server config from project
-        config, remote = load_config(env, remote, debug=debug)
+        config, remote = load_config(env, options.get('remote', ''), debug=options.get('debug', False))
 
         # Set remote server name
         self.remote = config.get('remote_name')
@@ -69,8 +70,6 @@ class Command(ServerManagementBaseCommand):
 
             new_git_hash = run('git rev-parse --short HEAD')
             new_venv = f'/var/www/{project_folder}/.venv-{new_git_hash}'
-
-            git_changes = sudo(f'git diff --name-only {initial_git_hash} {new_git_hash}')
 
             if initial_git_hash == new_git_hash and not options['force_update']:
                 print('Server is already up to date.')
@@ -117,6 +116,7 @@ class Command(ServerManagementBaseCommand):
                         sudo('python manage.py buildwatson')
 
         # Point the application to the new venv
+        sudo(f'rm -rf /var/www/{project_folder}/.venv')
         sudo(f'ln -sf {new_venv} /var/www/{project_folder}/.venv')
         sudo(f'rm -rf {old_venv}')
         sudo(f'supervisorctl signal HUP {project_folder}')

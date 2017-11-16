@@ -1,13 +1,13 @@
 from fabric.api import env, local, settings, sudo
 
-from ._core import load_config, ServerManagementBaseCommand
+from ._core import ServerManagementBaseCommand, load_config
 
 
 class Command(ServerManagementBaseCommand):
 
-    def handle(self, noinput, debug, remote='', *args, **options):
+    def handle(self, *args, **options):
         # Load server config from project
-        config, remote = load_config(env, remote, debug=debug)
+        config, remote = load_config(env, options.get('remote', ''), debug=options.get('debug', False))
 
         with settings(warn_only=True):
             # Dump the database on the server.

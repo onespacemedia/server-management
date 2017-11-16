@@ -1,18 +1,18 @@
 from __future__ import print_function
 
-from optparse import make_option
-
 import json
 import sys
+
+import fabric
 from django.conf import settings
 from django.core.management.base import BaseCommand
-import fabric
-from fabric.api import hide, prompt, run, settings as fabric_settings, fastprint, sudo
+from fabric.api import settings as fabric_settings
+from fabric.api import fastprint, hide, prompt, run, sudo
+from fabric.colors import green, red, yellow
 from fabric.contrib.console import confirm
-from fabric.colors import green, yellow, red
 
 
-class ServerManagementBaseCommand(BaseCommand):
+class ServerManagementBaseCommand(BaseCommand):  # pylint: disable=abstract-method
 
     def add_arguments(self, parser):
         super(ServerManagementBaseCommand, self).add_arguments(parser)
@@ -39,13 +39,18 @@ class ServerManagementBaseCommand(BaseCommand):
         )
 
 
-def load_config(env, remote=None, config_user='deploy', debug=False):
+# The complexity in this method comes from the number of different server
+# configurations we want to allow for. The AWS flow seems to be the most complex
+# of it all, it could potentially be moved into it's own method and called from
+# this one.
+
+def load_config(env, remote=None, config_user='deploy', debug=False):  # pylint: disable=too-complex,too-many-branches,too-many-statements
     env['sudo_prefix'] += '-H '
 
     # Load the json file
     try:
-        with open('{}/server.json'.format(settings.SITE_ROOT), 'r', encoding='utf-8') as json_data:
-            config = json.loads(json_data.read())
+        with open(f'{settings.SITE_ROOT}/server.json', 'r', encoding='utf-8') as json_data:
+            config = json.load(json_data)
     except Exception as e:
         print(e)
         raise Exception('Something is wrong with the server.json file, make sure it exists and is valid JSON.')
@@ -60,10 +65,10 @@ def load_config(env, remote=None, config_user='deploy', debug=False):
     if len(remote_keys) == 1:
         remote_prompt = remote_keys[0]
     elif remote:
+        remote_prompt = remote
+
         if remote_prompt not in remote_keys:
             raise Exception('Invalid remote name `{}`.'.format(remote))
-
-        remote_prompt = remote
     else:
         print('Available hosts: {}'.format(
             ', '.join(config['remotes'].keys())
