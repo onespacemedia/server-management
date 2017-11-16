@@ -23,6 +23,6 @@ deployment:
         - python3 -m venv venv; . venv/bin/activate; python setup.py verify
         - echo -e "[pypi]\nusername = onespacemedia\npassword = $PYPI_PASSWORD" >> ~/.pypirc
         - if [ -d dist ]; then rm -rf dist/; fi
+        - pip install twine wheel
         - python setup.py sdist bdist_wheel
-        - pip install twine
         - twine upload dist/*
