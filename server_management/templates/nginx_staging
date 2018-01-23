@@ -65,7 +65,7 @@ server {
     proxy_buffers 4 256k;
     proxy_busy_buffers_size 256k;
 
-    client_max_body_size 4G;
+    client_max_body_size 15M;
 
     # Make TCP send multiple buffers as individual packets.
     tcp_nodelay on;
