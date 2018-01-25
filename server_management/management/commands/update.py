@@ -57,7 +57,7 @@ class Command(ServerManagementBaseCommand):
             sudo('git config --global user.name "Onespacemedia Developers"')
             sudo('git config --global rebase.autoStash true')
 
-            sudo('git fetch')
+            sudo('git pull')
 
             if options.get('commit', False):
                 print('Pulling to specific commit.')
