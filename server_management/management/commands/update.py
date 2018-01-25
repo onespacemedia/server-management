@@ -13,7 +13,7 @@ class Command(BaseCommand):
 
         # Define current host from settings in server config
         env.host_string = config['remote']['server']['ip']
-        env.user = 'root'
+        env.user = 'ubuntu'
         env.disable_known_hosts = True
         env.reject_unknown_hosts = False
 
@@ -47,13 +47,19 @@ class Command(BaseCommand):
 
                 with virtualenv(venv):
                     with shell_env(DJANGO_SETTINGS_MODULE="{}.settings.production".format(project_folder)):
-                        run('chown {}:webapps -R /var/www/*'.format(project_folder))
+                        sudo('chown deploy:webapps -R /var/www/*')
 
-                        run('git pull')
+                        sudo('git config --global user.email "developers@onespacemedia.com"')
+                        sudo('git config --global user.name "Onespacemedia Developers"')
+                        sudo('git config --global rebase.autoStash true')
+                        sudo('git stash', user='deploy')
+                        sudo('git reset --hard HEAD', user='deploy')
+                        sudo('git pull', user='deploy')
 
-                        run('[[ -e requirements.txt ]] && pip install -r requirements.txt')
+                        sudo('chown {}:webapps -R /var/www/*'.format(project_folder))
+                        sudo('[[ -e requirements.txt ]] && pip install -r requirements.txt', user=project_folder)
 
-                        run('[[ -e Gulpfile.js ]] && gulp styles')
+                        sudo('[[ -e Gulpfile.js ]] && gulp styles', user=project_folder)
 
                         sudo('./manage.py collectstatic -l --noinput', user=project_folder)
 
@@ -74,5 +80,5 @@ class Command(BaseCommand):
                         if watson:
                             sudo('./manage.py buildwatson', user=project_folder)
 
-                        run('supervisorctl restart {}'.format(project_folder))
-                        run('chown {}:webapps -R /var/www/*'.format(project_folder))
+                        sudo('supervisorctl restart {}'.format(project_folder))
+                        sudo('chown {}:webapps -R /var/www/*'.format(project_folder))
