@@ -47,10 +47,10 @@ setup(
             'pytest',
             'pytest-cov',
             'pytest-django',
-            'pylint',
-            'pylint-django',
-            'pylint-mccabe',
-            'isort',
+            'pylint==1.6.5',
+            'pylint-django==0.7.2',
+            'pylint-mccabe==0.1.3',
+            'isort==4.2.5',
         ]
     },
     cmdclass={
