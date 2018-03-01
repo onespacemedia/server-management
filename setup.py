@@ -10,7 +10,7 @@ with open(os.path.join(os.path.dirname(__file__), 'README.md')) as readme:
 # allow setup.py to be run from any path
 os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
-VERSION = '3.0.4'
+VERSION = '3.0.5'
 
 class VerifyVersionCommand(install):
     """Custom command to verify that the git tag matches our version"""
@@ -43,14 +43,15 @@ setup(
     install_requires=['django', 'fabric3', 'requests', 'fabric3-virtualenv'],
     extras_require={
         'testing': [
+            'astroid==1.5.3',
             'coveralls',
             'pytest',
             'pytest-cov',
             'pytest-django',
-            'pylint',
-            'pylint-django',
-            'pylint-mccabe',
-            'isort',
+            'pylint==1.7.5',
+            'pylint-django==0.7.2',
+            'pylint-mccabe==0.1.3',
+            'isort==4.2.15',
         ]
     },
     cmdclass={
