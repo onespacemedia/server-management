@@ -43,6 +43,7 @@ setup(
     install_requires=['django', 'fabric3', 'requests', 'fabric3-virtualenv'],
     extras_require={
         'testing': [
+            'astroid==1.4.8',
             'coveralls',
             'pytest',
             'pytest-cov',
