@@ -43,15 +43,15 @@ setup(
     install_requires=['django', 'fabric3', 'requests', 'fabric3-virtualenv'],
     extras_require={
         'testing': [
-            'astroid==1.4.8',
+            'astroid==1.5.3',
             'coveralls',
             'pytest',
             'pytest-cov',
             'pytest-django',
-            'pylint==1.6.5',
+            'pylint==1.7.5',
             'pylint-django==0.7.2',
             'pylint-mccabe==0.1.3',
-            'isort==4.2.5',
+            'isort==4.2.15',
         ]
     },
     cmdclass={
