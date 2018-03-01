@@ -159,7 +159,6 @@ class Command(ServerManagementBaseCommand):
 
         # Create session_files
         session_files = {
-            'gunicorn_start': NamedTemporaryFile(mode='w+', delete=False),
             'supervisor_config': NamedTemporaryFile(mode='w+', delete=False),
             'supervisor_init': NamedTemporaryFile(mode='w+', delete=False),
             'nginx_production': NamedTemporaryFile(mode='w+', delete=False),
@@ -169,12 +168,6 @@ class Command(ServerManagementBaseCommand):
         }
 
         # Parse files
-        session_files['gunicorn_start'].write(render_to_string('gunicorn_start', {
-            'project': project_folder,
-            'settings': remote['server'].get('settings_file', 'production')
-        }))
-        session_files['gunicorn_start'].close()
-
         session_files['supervisor_config'].write(render_to_string('supervisor_config', {
             'project': project_folder
         }))
@@ -479,7 +472,7 @@ class Command(ServerManagementBaseCommand):
         db_tasks = [
             {
                 'title': 'Create the application postgres role',
-                'command': f'su - postgres -c "createuser {db_name}"',
+                'command': f'su - postgres -c "createuser {db_user}"',
             },
             {
                 'title': 'Ensure database is created',
@@ -631,14 +624,6 @@ class Command(ServerManagementBaseCommand):
         run_tasks(env, venv_tasks, user=project_folder)
 
         gunicorn_tasks = [
-            {
-                'title': 'Create the Gunicorn script file',
-                'fabric_command': 'put',
-                'fabric_args': [
-                    session_files['gunicorn_start'].name,
-                    f'/var/www/{project_folder}/gunicorn_start',
-                ],
-            },
             {
                 'title': 'Make the Gunicorn script file executable',
                 'command': f'chmod +x /var/www/{project_folder}/gunicorn_start',
