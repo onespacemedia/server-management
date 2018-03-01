@@ -472,7 +472,7 @@ class Command(ServerManagementBaseCommand):
         db_tasks = [
             {
                 'title': 'Create the application postgres role',
-                'command': f'su - postgres -c "createuser {db_name}"',
+                'command': f'su - postgres -c "createuser {db_user}"',
             },
             {
                 'title': 'Ensure database is created',
