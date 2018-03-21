@@ -1,6 +1,14 @@
 # Base configuration from Mozilla SSL Configuration Generator
 # https://mozilla.github.io/server-side-tls/ssl-config-generator/?server=nginx-1.10.1&openssl=1.0.1e&hsts=yes&profile=intermediate
 
+upstream wsgi_server {
+  # fail_timeout=0 means we always retry an upstream even if it failed
+  # to return a good HTTP response (in case the Unicorn master nukes a
+  # single worker for timing out).
+
+  server 127.0.0.1:2000 fail_timeout=0;
+}
+
 server {
     # SSL configuration
     server_name {{ domain_names }};
