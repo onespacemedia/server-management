@@ -74,7 +74,7 @@ def load_config(env, remote=None, config_user='deploy', debug=False):  # pylint:
             ', '.join(config['remotes'].keys())
         ))
 
-        remote_prompt = prompt('Please enter a remote: ', default=remote_keys[0], validate=lambda x: x in remote_keys)
+        remote_prompt = prompt('Please enter a remote: ', default=remote_keys[0], validate=lambda x: remote_keys[remote_keys.index(x)])
 
     remote = config['remotes'][remote_prompt]
     env.host_string = remote['server']['ip']
