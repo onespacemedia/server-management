@@ -1,14 +1,18 @@
 import os
 
-from django.core.management import call_command
+from django.conf import settings as django_settings
 from fabric.api import env, local, run, settings, sudo
 
 from ._core import ServerManagementBaseCommand, load_config, run_tasks
 from .backupdb import perform_backup
 
+
 class Command(ServerManagementBaseCommand):
 
     def handle(self, *args, **options):
+        if not getattr(django_settings, 'SERVER_MANAGEMENT_ENABLE_PUSHDB', False):
+            raise Exception('Database pushing has been disabled.')
+
         # Load server config from project
         config, remote = load_config(env, options.get('remote', ''), debug=options.get('debug', False))
 
