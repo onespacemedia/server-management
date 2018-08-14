@@ -31,7 +31,7 @@ class Command(ServerManagementBaseCommand):
                 django_settings.STATIC_ROOT
             ))
 
-            local('rsync --progress -av{} --exclude "assets/" {}@{}:/var/www/{}_media/ {}'.format(
+            local('rsync --progress -av{} --exclude "assets/" --exclude "cache/" {}@{}:/var/www/{}_media/ {}'.format(
                 ' ' if not getattr(env, 'key_filename') else ' -e "ssh -i {}"'.format(
                     os.path.expanduser(env.key_filename),  # Fixes an rsync bug with ~ paths.
                 ),

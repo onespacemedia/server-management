@@ -24,7 +24,7 @@ class Command(ServerManagementBaseCommand):
                     ), capture=True)
 
         with settings(warn_only=True):
-            local('rsync --rsync-path="sudo -u {} rsync" --progress -O -av{} {}/ {}@{}:/var/www/{}_media/'.format(
+            local('rsync --rsync-path="sudo -u {} rsync" --progress --exclude "cache/" -O -av{} {}/ {}@{}:/var/www/{}_media/'.format(
                 project_folder,
                 ' ' if not getattr(env, 'key_filename') else ' -e "ssh -i {}"'.format(
                     os.path.expanduser(env.key_filename),  # Fixes an rsync bug with ~ paths.
