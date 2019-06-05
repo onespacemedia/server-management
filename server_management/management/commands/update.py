@@ -120,16 +120,3 @@ class Command(ServerManagementBaseCommand):
         sudo(f'ln -sf {new_venv} /var/www/{project_folder}/.venv')
         sudo(f'rm -rf {old_venv}')
         sudo(f'supervisorctl signal HUP {project_folder}')
-
-        # Register the release with Opbeat.
-        if 'opbeat' in config and config['opbeat']['app_id'] and config['opbeat']['secret_token']:
-            with(lcd(local_project_path)):
-                local('curl https://intake.opbeat.com/api/v1/organizations/{}/apps/{}/releases/'
-                      ' -H "Authorization: Bearer {}"'
-                      ' -d rev=`git log -n 1 --pretty=format:%H`'
-                      ' -d branch=`git rev-parse --abbrev-ref HEAD`'
-                      ' -d status=completed'.format(
-                          config['opbeat']['organization_id'],
-                          config['opbeat']['app_id'],
-                          config['opbeat']['secret_token'],
-                      ))
