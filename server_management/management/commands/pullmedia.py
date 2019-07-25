@@ -40,5 +40,3 @@ class Command(ServerManagementBaseCommand):
                 project_folder,
                 django_settings.MEDIA_ROOT
             ))
-
-            local('python manage.py thumbnail clear')

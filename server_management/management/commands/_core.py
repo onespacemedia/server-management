@@ -47,34 +47,7 @@ class ServerManagementBaseCommand(BaseCommand):  # pylint: disable=abstract-meth
 def load_config(env, remote=None, config_user='deploy', debug=False):  # pylint: disable=too-complex,too-many-branches,too-many-statements
     env['sudo_prefix'] += '-H '
 
-    # Load the json file
-    try:
-        with open(f'{settings.SITE_ROOT}/server.json', 'r', encoding='utf-8') as json_data:
-            config = json.load(json_data)
-    except Exception as e:
-        print(e)
-        raise Exception('Something is wrong with the server.json file, make sure it exists and is valid JSON.')
-
-    # Define current host from settings in server config
-    # First check if there is a single remote or multiple.
-    if 'remotes' not in config or not config['remotes']:
-        raise Exception('No remotes specified in config.')
-
-    # Prompt for a host selection.
-    remote_keys = list(config['remotes'].keys())
-    if len(remote_keys) == 1:
-        remote_prompt = remote_keys[0]
-    elif remote:
-        remote_prompt = remote
-
-        if remote_prompt not in remote_keys:
-            raise Exception('Invalid remote name `{}`.'.format(remote))
-    else:
-        print('Available hosts: {}'.format(
-            ', '.join(config['remotes'].keys())
-        ))
-
-        remote_prompt = prompt('Please enter a remote: ', default=remote_keys[0], validate=lambda x: remote_keys[remote_keys.index(x)])
+    remote_prompt = get_remote(remote)
 
     remote = config['remotes'][remote_prompt]
     env.host_string = remote['server']['ip']
@@ -127,6 +100,39 @@ def load_config(env, remote=None, config_user='deploy', debug=False):  # pylint:
 
     # Return the server config
     return config, remote
+
+
+def get_remote(remote):
+    # Load the json file
+    try:
+        with open(f'{settings.SITE_ROOT}/server.json', 'r', encoding='utf-8') as json_data:
+            config = json.load(json_data)
+    except Exception as e:
+        print(e)
+        raise Exception('Something is wrong with the server.json file, make sure it exists and is valid JSON.')
+
+    # Define current host from settings in server config
+    # First check if there is a single remote or multiple.
+    if 'remotes' not in config or not config['remotes']:
+        raise Exception('No remotes specified in config.')
+
+    # Prompt for a host selection.
+    remote_keys = list(config['remotes'].keys())
+    if len(remote_keys) == 1:
+        remote_prompt = remote_keys[0]
+    elif remote:
+        remote_prompt = remote
+
+        if remote_prompt not in remote_keys:
+            raise Exception('Invalid remote name `{}`.'.format(remote))
+    else:
+        print('Available hosts: {}'.format(
+            ', '.join(config['remotes'].keys())
+        ))
+
+        remote_prompt = prompt('Please enter a remote: ', default=remote_keys[0], validate=lambda x: remote_keys[remote_keys.index(x)])
+
+    return remote_prompt
 
 
 def title_print(title, state=''):
