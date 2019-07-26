@@ -295,9 +295,6 @@ class Command(ServerManagementBaseCommand):
                         'libpq-dev',
                         'python3-psycopg2',  # TODO: Is this required?
 
-                        # Required under Python 3.
-                        'python3-venv',
-
                         # Other
                         'libgeoip-dev' if optional_packages.get('geoip', True) else '',
                         'libmysqlclient-dev' if optional_packages.get('mysql', True) else '',
