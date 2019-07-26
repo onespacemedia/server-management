@@ -4,9 +4,6 @@ import sys
 from setuptools import setup
 from setuptools.command.install import install
 
-with open(os.path.join(os.path.dirname(__file__), 'README.md')) as readme:
-    README = readme.read()
-
 # allow setup.py to be run from any path
 os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
@@ -23,7 +20,6 @@ setup(
     ],
     include_package_data=True,
     description='A set of server management tools used by Onespacemedia.',
-    long_description=README,
     url='https://github.com/onespacemedia/server-management/',
     author='James Foley, Daniel Samuels, Aidan Currah',
     author_email='developers@onespacemedia.com',
