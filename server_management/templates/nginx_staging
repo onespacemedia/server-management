@@ -70,8 +70,10 @@ server {
         expires 30d;
         add_header Pragma public;
         add_header Cache-Control "public";
-        gzip_static on;
+
+        gzip on;
         gzip_vary on;
+        gzip_types text/plain application/x-javascript application/javascript text/xml text/css image/svg+xml;
     }
 
     location /media/ {
