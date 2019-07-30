@@ -3,13 +3,9 @@ from __future__ import print_function
 import json
 import sys
 
-import fabric
 from django.conf import settings
 from django.core.management.base import BaseCommand
-from fabric.api import settings as fabric_settings
-from fabric.api import fastprint, hide, prompt, run, sudo
-from fabric.colors import green, red, yellow
-from fabric.contrib.console import confirm
+from fabric import Connection
 
 
 class ServerManagementBaseCommand(BaseCommand):  # pylint: disable=abstract-method
@@ -44,65 +40,7 @@ class ServerManagementBaseCommand(BaseCommand):  # pylint: disable=abstract-meth
 # of it all, it could potentially be moved into it's own method and called from
 # this one.
 
-def load_config(env, remote=None, config_user='deploy', debug=False):  # pylint: disable=too-complex,too-many-branches,too-many-statements
-    env['sudo_prefix'] += '-H '
-
-    remote_prompt = get_remote(remote)
-
-    remote = config['remotes'][remote_prompt]
-    env.host_string = remote['server']['ip']
-    config['remote_name'] = remote_prompt
-
-    env.user = config_user
-    env.disable_known_hosts = True
-    env.reject_unknown_hosts = False
-
-    # If is_aws is explicitly declared, trust it.
-    if 'is_aws' in remote:
-        aws_check = remote['is_aws']
-    # Try to guess it from the hostname.
-    elif 'amazonaws.com' in env.host_string:
-        aws_check = True
-    # Dunno, ask the user.
-    else:
-        aws_check = confirm('Is this host on AWS?', default=False)
-
-    if aws_check:
-        if 'initial_user' in remote['server']:
-            env.user = remote['server']['initial_user']
-        else:
-            env.user = 'ubuntu'
-
-        if 'identity_file' in remote['server']:
-            if remote['server']['identity_file']:
-                env.key_filename = remote['server']['identity_file']
-        else:
-            key = prompt('Please enter the path to the AWS key pair: ')
-            if key:
-                env.key_filename = key
-    else:
-        if sys.argv[1] == 'deploy' and 'initial_user' in remote['server']:
-            env.user = remote['server']['initial_user']
-        elif 'deploy_user' in remote['server']:
-            env.user = remote['server']['deploy_user']
-
-    # Make sure we can connect to the server
-    with hide('output', 'running', 'warnings'):
-        with fabric_settings(warn_only=True):
-            if not run('whoami'):
-                print('Failed to connect to remote server')
-                exit()
-
-    if not debug:
-        # Change the output to be less verbose.
-        fabric.state.output['stdout'] = False
-        fabric.state.output['running'] = False
-
-    # Return the server config
-    return config, remote
-
-
-def get_remote(remote):
+def load_config(remote=None, config_user='deploy', debug=False):
     # Load the json file
     try:
         with open(f'{settings.SITE_ROOT}/server.json', 'r', encoding='utf-8') as json_data:
@@ -111,6 +49,69 @@ def get_remote(remote):
         print(e)
         raise Exception('Something is wrong with the server.json file, make sure it exists and is valid JSON.')
 
+    remote_prompt = get_remote(remote, config)
+    config['remote_name'] = remote_prompt
+
+    host_string = config['remotes'][remote_prompt]['server']['ip']
+    remote_user = config_user
+    connect_kwargs = {}
+
+    remote_user, key_filename = aws_get_info(config['remotes'][remote_prompt], remote_user)
+    if key_filename:
+        connect_kwargs['key_filename'] = key_filename
+
+    connection = Connection(
+        host=host_string,
+        user=remote_user,
+        connect_kwargs=connect_kwargs
+    )
+
+    # Make sure we can connect to the server
+    trial_run = connection.run('whoami', hide=True)
+    if trial_run.failed:
+        print('Failed to connect to remote server')
+        exit()
+
+    # Return the server config, the chosen remote and the connection object.
+    return config, connection
+
+
+def aws_get_info(remote, remote_user=None):
+    key_filename = None
+
+    # If is_aws is explicitly declared, trust it.
+    if 'is_aws' in remote:
+        aws_check = remote['is_aws']
+    # Try to guess it from the hostname.
+    elif 'amazonaws.com' in remote['server']['ip']:
+        aws_check = True
+    # Dunno, ask the user.
+    else:
+        aws_check = confirm('Is this host on AWS?', default=False)
+
+    if aws_check:
+        if 'initial_user' in remote['server']:
+            remote_user = remote['server']['initial_user']
+        else:
+            remote_user = 'ubuntu'
+
+        if 'identity_file' in remote['server']:
+            if remote['server']['identity_file']:
+                key_filename = remote['server']['identity_file']
+        else:
+            key = prompt('Please enter the path to the AWS key pair: ')
+            if key:
+                key_filename = key
+    else:
+        if sys.argv[1] == 'deploy' and 'initial_user' in remote['server']:
+            remote_user = remote['server']['initial_user']
+        elif 'deploy_user' in remote['server']:
+            remote_user = remote['server']['deploy_user']
+
+    return remote_user, key_filename
+
+
+def get_remote(remote, config):
     # Define current host from settings in server config
     # First check if there is a single remote or multiple.
     if 'remotes' not in config or not config['remotes']:
@@ -135,19 +136,62 @@ def get_remote(remote):
     return remote_prompt
 
 
-def title_print(title, state=''):
+def prompt(text, default=None, validate=None):
+    if default:
+        text = text.strip()
+        if text[-1] == ':' and len(text) > 1:
+            text = text[0:-1]
+        text = f'{text} [{default}]: '
+
+    while 1:
+        user_input = input(text)
+
+        if not user_input and default is not None:
+            return default
+
+        if (user_input and validate(user_input)) or (user_input and default is None):
+            return user_input
+
+
+def confirm(text, default=None):
+    while 1:
+        user_input = input(text)
+
+        if user_input.lower() in ['y', 'yes']:
+            return True
+
+        if user_input.lower() in ['n', 'no']:
+            return False
+
+        if not user_input and default is not None:
+            return default
+
+
+def title_print(connection, title, state=''):
+    def _wrap_with(code):
+        def inner(text, bold=False):
+            c = code
+            if bold:
+                c = "1;%s" % c
+            return "\033[%sm%s\033[0m" % (c, text)
+        return inner
+
+    red = _wrap_with('31')
+    green = _wrap_with('32')
+    yellow = _wrap_with('33')
+
     if state == 'task':
-        fastprint('[{}] {} ... '.format(
+        connection.fastprint('[{}] {} ... '.format(
             yellow('TASK'),
             title,
         ))
     elif state == 'succeeded':
-        fastprint('\r[{}] {} ... done'.format(
+        connection.fastprint('\r[{}] {} ... done'.format(
             green('TASK'),
             title,
         ), end='\n')
     elif state == 'failed':
-        fastprint('\r[{}] {} ... failed'.format(
+        connection.fastprint('\r[{}] {} ... failed'.format(
             red('TASK'),
             title,
         ), end='\n')
@@ -162,7 +206,7 @@ def check_request(task, result):
         title_print(task['title'], state='failed')
 
 
-def run_tasks(env, tasks, user=None):
+def run_tasks(connection, tasks, user=None):
     # Loop tasks
     for task in tasks:
         title_print(task['title'], state='task')
@@ -170,12 +214,12 @@ def run_tasks(env, tasks, user=None):
         # Generic command
         if 'command' in task:
             if user:
-                task_result = sudo(task['command'], user=user)
+                task_result = connection.sudo(task['command'], user=user)
             else:
-                task_result = run(task['command'])
+                task_result = connection.run(task['command'])
         # Fabric API
         elif 'fabric_command' in task:
-            task_result = getattr(fabric.api, task['fabric_command'])(*task.get('fabric_args', []), **task.get('fabric_kwargs', {}))
+            task_result = getattr(connection, task['fabric_command'])(*task.get('fabric_args', []), **task.get('fabric_kwargs', {}))
 
         # Check result
         check_request(task, task_result)

@@ -1,42 +1,29 @@
 import os
 
 from django.conf import settings as django_settings
-from fabric.api import env, hide, lcd, local, settings
 
 from ._core import ServerManagementBaseCommand, load_config
 
 
 class Command(ServerManagementBaseCommand):
-
     def handle(self, *args, **options):
         # Load server config from project
-        load_config(env, options.get('remote', ''), debug=options.get('debug', False))
+        _, connection = load_config(options.get('remote', ''), debug=options.get('debug', False))
 
-        # Set local project path
-        local_project_path = django_settings.SITE_ROOT
+        connection.local('mkdir -p {}/uploads/'.format(
+            django_settings.MEDIA_ROOT
+        ))
 
-        # Change into the local project folder
-        with hide('output', 'running', 'warnings'):
-            with lcd(local_project_path):
-                project_folder = local("basename $( find {} -name 'wsgi.py' -not -path '*/.venv/*' -not -path '*/venv/*' | xargs -0 -n1 dirname )".format(
-                    local_project_path
-                ), capture=True)
+        connection.local('mkdir -p {}'.format(
+            django_settings.STATIC_ROOT
+        ))
 
-        with settings(warn_only=True):
-            local('mkdir -p {}/uploads/'.format(
-                django_settings.MEDIA_ROOT
-            ))
-
-            local('mkdir -p {}'.format(
-                django_settings.STATIC_ROOT
-            ))
-
-            local('rsync --progress -av{} --exclude "assets/" --exclude "cache/" {}@{}:/var/www/{}_media/ {}'.format(
-                ' ' if not getattr(env, 'key_filename') else ' -e "ssh -i {}"'.format(
-                    os.path.expanduser(env.key_filename),  # Fixes an rsync bug with ~ paths.
-                ),
-                env.user,
-                env.host_string,
-                project_folder,
-                django_settings.MEDIA_ROOT
-            ))
+        connection.local('rsync --progress -av{} --exclude "assets/" --exclude "cache/" {}@{}:/var/www/{}_media/ {}'.format(
+            '' if not connection.connect_kwargs.get('key_filename', False) else ' -e "ssh -i {}"'.format(
+                os.path.expanduser(connection.connect_kwargs['key_filename']),  # Fixes an rsync bug with ~ paths.
+            ),
+            connection.user,
+            connection.host,
+            os.path.basename(django_settings.SITE_ROOT),
+            django_settings.MEDIA_ROOT
+        ))
