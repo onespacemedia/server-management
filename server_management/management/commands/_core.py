@@ -149,7 +149,7 @@ def prompt(text, default=None, validate=None):
         if not user_input and default is not None:
             return default
 
-        if (user_input and validate(user_input)) or (user_input and default is None):
+        if user_input and (validate is None or validate(user_input)):
             return user_input
 
 
