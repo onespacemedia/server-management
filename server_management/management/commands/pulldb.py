@@ -40,7 +40,7 @@ class Command(ServerManagementBaseCommand):
                 config['local']['database']['name']
             ))
         except UnexpectedExit as e:
-            if not f'''database "{config['local']['database']['name']}" does not exist''' in e.result.stderr:
+            if not e.result.exited == 1:
                 raise e
 
         # Create a new db, this is an easy way to start fresh
