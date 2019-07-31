@@ -10,8 +10,8 @@ class Command(ServerManagementBaseCommand):
         # Load server config from project
         _, connection = load_config(options.get('remote', ''), debug=options.get('debug', False))
 
-        connection.local('mkdir -p {}/uploads/'.format(
-            django_settings.MEDIA_ROOT
+        connection.local('mkdir -p {}'.format(
+            os.path.join(django_settings.MEDIA_ROOT, 'uploads')
         ))
 
         connection.local('mkdir -p {}'.format(
@@ -19,7 +19,7 @@ class Command(ServerManagementBaseCommand):
         ))
 
         connection.local('rsync --progress -av{} --exclude "assets/" --exclude "cache/" {}@{}:/var/www/{}_media/ {}'.format(
-            '' if not connection.connect_kwargs.get('key_filename', False) else ' -e "ssh -i {}"'.format(
+            '' if not connection.connect_kwargs.get('key_filename') else ' -e "ssh -i {}"'.format(
                 os.path.expanduser(connection.connect_kwargs['key_filename']),  # Fixes an rsync bug with ~ paths.
             ),
             connection.user,

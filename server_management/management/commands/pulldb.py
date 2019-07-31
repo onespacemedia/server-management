@@ -19,7 +19,7 @@ class Command(ServerManagementBaseCommand):
 
         # Pull the SQL file down.
         connection.local('scp{} {}@{}:/home/{}/{}.sql ~/{}.sql'.format(
-            f' -i {connection.connect_kwargs["key_filename"]}' if connection.connect_kwargs.get('key_filename', False) else '',
+            f' -i {connection.connect_kwargs["key_filename"]}' if connection.connect_kwargs.get('key_filename') else '',
             connection.user,
             connection.host,
             remote['database']['user'],
