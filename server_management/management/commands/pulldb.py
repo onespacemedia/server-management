@@ -1,3 +1,5 @@
+import os
+
 from invoke import run as local
 from invoke import UnexpectedExit
 
@@ -12,25 +14,36 @@ class Command(ServerManagementBaseCommand):
 
 
         # Dump the database on the server.
-        connection.sudo("su - {user} -c 'pg_dump {name} -cOx -U {user} -f /home/{user}/{name}.sql --clean'".format(
+        connection.sudo("su - {user} -c 'pg_dump {name} -cOx -U {user} -f /{path} --clean'".format(
             name=remote['database']['name'],
             user=remote['database']['user'],
+            path=os.path.join(
+                'home',
+                remote['database']['user'],
+                f'{remote["database"]["name"]}.sql'
+            )
         ))
 
         # Pull the SQL file down.
-        connection.local('scp{} {}@{}:/home/{}/{}.sql ~/{}.sql'.format(
+        connection.local('scp{} {}@{}:/{} ~/{}.sql'.format(
             f' -i {connection.connect_kwargs["key_filename"]}' if connection.connect_kwargs.get('key_filename') else '',
             connection.user,
             connection.host,
-            remote['database']['user'],
-            remote['database']['name'],
+            os.path.join(
+                'home',
+                remote['database']['user'],
+                f'{remote["database"]["name"]}.sql'
+            ),
             config['local']['database']['name'],
         ))
 
         # Delete the file on the server.
-        connection.sudo('rm -f /home/{}/{}.sql'.format(
-            remote['database']['user'],
-            remote['database']['name'],
+        connection.sudo('rm -f /{}'.format(
+            os.path.join(
+                'home',
+                remote['database']['user'],
+                f'{remote["database"]["name"]}.sql'
+            )
         ))
 
         # Drop the local db

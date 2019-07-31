@@ -1,3 +1,5 @@
+import os
+
 from django.utils.timezone import now
 
 from ._core import ServerManagementBaseCommand, load_config
@@ -7,9 +9,14 @@ def perform_backup(config, connection):
     remote = config['remotes'][config['remote_name']]
 
     # Dump the database on the server.
-    connection.sudo('su - {user} -c \'pg_dump {name} -cOx -U {user} -f /home/{user}/{name}.sql --clean\''.format(
+    connection.sudo('su - {user} -c \'pg_dump {name} -cOx -U {user} -f /{path} --clean\''.format(
         name=remote['database']['name'],
         user=remote['database']['user'],
+        path=os.path.join(
+            'home',
+            remote['database']['user'],
+            f'{remote["database"]["name"]}.sql'
+        )
     ))
 
     backup_folder = '~/Backups/{}/{}'.format(
@@ -21,20 +28,28 @@ def perform_backup(config, connection):
     connection.local('mkdir -p {}'.format(backup_folder))
 
     # Pull the SQL file down.
-    connection.local('scp {} {}@{}:/home/{}/{}.sql {}/{}.sql'.format(
-        f' -i {connection.connect_kwargs["key_filename"]} ' if connection.connect_kwargs.get('key_filename') else '',
+    connection.local('scp{}{}@{}:/{} {}'.format(
+        f' -i {connection.connect_kwargs["key_filename"]} ' if connection.connect_kwargs.get('key_filename') else ' ',
         connection.user,
         connection.host,
-        remote['database']['user'],
-        remote['database']['name'],
-        backup_folder,
-        now().strftime('%Y%m%d%H%M'),
+        os.path.join(
+            'home',
+            remote['database']['user'],
+            f'{remote["database"]["name"]}.sql'
+        ),
+        os.path.join(
+            backup_folder,
+            f'{now().strftime("%Y%m%d%H%M")}.sql'
+        )
     ))
 
     # Delete the file on the server.
-    connection.sudo('rm /home/{}/{}.sql'.format(
-        remote['database']['user'],
-        remote['database']['name'],
+    connection.sudo('rm /{}'.format(
+        os.path.join(
+            'home',
+            remote['database']['user'],
+            f'{remote["database"]["name"]}.sql'
+        )
     ))
 
 

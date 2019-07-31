@@ -28,12 +28,15 @@ class Command(ServerManagementBaseCommand):
         ))
 
         # Push the database from earlier up to the server
-        connection.local('scp{}~/{}.sql {}@{}:/tmp/{}.sql'.format(
+        connection.local('scp{}~/{}.sql {}@{}:/{}'.format(
             f' -i {connection.connect_kwargs["key_filename"]} ' if connection.connect_kwargs.get('key_filename') else ' ',
             config['local']['database']['name'],
             connection.user,
             remote['server']['ip'],
-            remote['database']['name'],
+            os.path.join(
+                'tmp',
+                f'{remote["database"]["name"]}.sql'
+            )
         ))
 
         # Define db tasks
@@ -76,8 +79,12 @@ class Command(ServerManagementBaseCommand):
 
         # Import the database file
         # sudo("su - {name} -c 'psql -q {name} < /tmp/{name}.sql > /dev/null 2>&1'".format(
-        connection.sudo('psql {name} < /tmp/{name}.sql'.format(
-            name=remote['database']['name']
+        connection.sudo('psql {} < /{}'.format(
+            remote['database']['name'],
+            os.path.join(
+                'tmp',
+                f'{remote["database"]["name"]}.sql'
+            )
         ), user=remote['database']['user'])
 
         # Remove the database file

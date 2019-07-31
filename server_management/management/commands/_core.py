@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import json
+import os
 import sys
 
 from django.conf import settings
@@ -43,7 +44,7 @@ class ServerManagementBaseCommand(BaseCommand):  # pylint: disable=abstract-meth
 def load_config(remote=None, config_user='deploy', debug=False):
     # Load the json file
     try:
-        with open(f'{settings.SITE_ROOT}/server.json', 'r', encoding='utf-8') as json_data:
+        with open(os.path.join(settings.SITE_ROOT, 'server.json'), 'r', encoding='utf-8') as json_data:
             config = json.load(json_data)
     except Exception as e:
         print(e)
