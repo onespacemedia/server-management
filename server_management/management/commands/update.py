@@ -1,7 +1,6 @@
+import os
+
 from django.conf import settings as django_settings
-from fabric.api import (cd, env, hide, lcd, local, run, settings, shell_env,
-                        sudo)
-from fabvenv import virtualenv
 
 from ._core import ServerManagementBaseCommand, load_config
 
@@ -27,57 +26,46 @@ class Command(ServerManagementBaseCommand):
     # different situations on the server. Hard to see where we could reduce code.
 
     def handle(self, *args, **options):  # pylint: disable=too-many-locals,too-many-statements
-        # Load server config from project
-        config, remote = load_config(env, options.get('remote', ''), debug=options.get('debug', False))
-
-        # Set remote server name
-        self.remote = config.get('remote_name')
-
-        # Set local project path
-        local_project_path = django_settings.SITE_ROOT
+        config, connection = load_config(options.get('remote', ''), debug=options.get('debug', False))
+        remote = config['remotes'][config['remote_name']]
 
         # Get our python version - we'll need this while rebuilding the
         # virtualenv.
         python_version = remote['server'].get('python_version', '3')
 
         # Change into the local project folder
-        with hide('output', 'running', 'warnings'), lcd(local_project_path):
-            project_folder = local(f"basename $( find {local_project_path} -name 'wsgi.py' -not -path '*/.venv/*' -not -path '*/venv/*' | xargs -0 -n1 dirname )", capture=True)
+        project_name = os.path.basename(django_settings.SITE_ROOT)
 
-        with settings(sudo_user=project_folder), cd(f'/var/www/{project_folder}'):
-            initial_git_hash = run('git rev-parse --short HEAD')
-            old_venv = f'/var/www/{project_folder}/.venv-{initial_git_hash}'
+        settings_module = f"{project_name}.settings.{remote['server'].get('settings_file', 'production')}"
+        django_env = {
+            'DJANGO_SETTINGS_MODULE': settings_module
+        }
 
-            settings_module = '{}.settings.{}'.format(
-                project_folder,
-                remote['server'].get('settings_file', 'production'),
-            )
+        with connection.cd(f'/var/www/{project_name}'):
+            initial_git_hash = connection.run('git rev-parse --short HEAD')
+            old_venv = f'/var/www/{project_name}/.venv-{initial_git_hash}'
 
-            sudo('git config --global user.email "developers@onespacemedia.com"')
-            sudo('git config --global user.name "Onespacemedia Developers"')
-            sudo('git config --global rebase.autoStash true')
-
-            sudo('git pull')
+            connection.sudo('git config --global user.email "developers@onespacemedia.com"', user=project_name)
+            connection.sudo('git config --global user.name "Onespacemedia Developers"', user=project_name)
+            connection.sudo('git config --global rebase.autoStash true', user=project_name)
+            connection.sudo('git pull', user=project_name)
 
             if options.get('commit', False):
                 print('Pulling to specific commit.')
-                sudo('git reset --hard {}'.format(
-                    options.get('commit', False),
-                ))
+                connection.sudo(f"git reset --hard {options.get('commit', False)}", user=project_name)
             else:
                 print('Pulling to HEAD')
-                sudo('git reset --hard HEAD')
+                connection.sudo('git reset --hard HEAD', user=project_name)
 
-            new_git_hash = run('git rev-parse --short HEAD')
-            new_venv = f'/var/www/{project_folder}/.venv-{new_git_hash}'
+            new_git_hash = connection.run('git rev-parse --short HEAD', user=project_name)
+            new_venv = f'/var/www/{project_name}/.venv-{new_git_hash}'
 
             if initial_git_hash == new_git_hash and not options['force_update']:
                 print('Server is already up to date.')
                 exit()
 
             # Does the new venv folder already exist?
-            with settings(warn_only=True):
-                venv_folder = run(f'test -d {new_venv}')
+            venv_folder = connection.run(f'test -d {new_venv}')
 
             # Build the virtualenv.
             if venv_folder.return_code == 0:
@@ -87,36 +75,35 @@ class Command(ServerManagementBaseCommand):
                 print('Creating venv for this commit hash')
 
                 # Check if we have PyPy
-                with settings(warn_only=True):
-                    pypy = run('test -x /usr/bin/pypy')
+                pypy = connection.run('test -x /usr/bin/pypy')
 
                 if pypy.return_code == 0:
-                    sudo(f'virtualenv -p /usr/bin/pypy {new_venv}')
+                    connection.sudo(f'virtualenv -p /usr/bin/pypy {new_venv}', user=project_name)
                 else:
-                    sudo(f'virtualenv -p python{python_version} {new_venv}')
+                    connection.sudo(f'virtualenv -p python{python_version} {new_venv}', user=project_name)
 
-                with virtualenv(new_venv), shell_env(DJANGO_SETTINGS_MODULE=settings_module):
-                    sudo('[[ -e requirements.txt ]] && pip install -r requirements.txt')
-                    sudo('pip install gunicorn')
+                with connection.prefix(f'workon {new_venv}'):
+                    connection.sudo('[[ -e requirements.txt ]] && pip install -r requirements.txt', user=project_name, env=django_env)
+                    connection.sudo('pip install gunicorn', user=project_name, env=django_env)
 
             # Things which need to happen regardless of whether there was a venv already.
-            with virtualenv(new_venv), shell_env(DJANGO_SETTINGS_MODULE=settings_module):
+            with connection.prefix(f'workon {new_venv}'):
                 if remote['server'].get('build_system', 'npm') == 'npm':
-                    sudo('. ~/.nvm/nvm.sh && yarn', shell='/bin/bash')
-                    sudo('. ~/.nvm/nvm.sh && yarn run build', shell='/bin/bash')
+                    connection.sudo('. ~/.nvm/nvm.sh && yarn', shell='/bin/bash', user=project_name, env=django_env)
+                    connection.sudo('. ~/.nvm/nvm.sh && yarn run build', shell='/bin/bash', user=project_name, env=django_env)
 
-                sudo('python manage.py collectstatic --noinput -l')
+                connection.sudo('python manage.py collectstatic --noinput -l', user=project_name, env=django_env)
 
-                sudo('yes yes | python manage.py migrate')
+                connection.sudo('yes yes | python manage.py migrate', user=project_name, env=django_env)
 
-                requirements = sudo('pip freeze')
+                requirements = connection.sudo('pip freeze', user=project_name, env=django_env)
 
                 for line in requirements.split('\n'):
                     if line.startswith('django-watson'):
-                        sudo('python manage.py buildwatson')
+                        connection.sudo('python manage.py buildwatson', user=project_name, env=django_env)
 
         # Point the application to the new venv
-        sudo(f'rm -rf /var/www/{project_folder}/.venv')
-        sudo(f'ln -sf {new_venv} /var/www/{project_folder}/.venv')
-        sudo(f'rm -rf {old_venv}')
-        sudo(f'supervisorctl signal HUP {project_folder}')
+        connection.sudo(f'rm -rf /var/www/{project_name}/.venv')
+        connection.sudo(f'ln -sf {new_venv} /var/www/{project_name}/.venv')
+        connection.sudo(f'rm -rf {old_venv}')
+        connection.sudo(f'supervisorctl signal HUP {project_name}')

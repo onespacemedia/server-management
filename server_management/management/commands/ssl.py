@@ -1,28 +1,28 @@
 import os
 
 from django.conf import settings as django_settings
-from fabric.api import abort, env, local, prompt
-from fabric.contrib.console import confirm
 
-from ._core import ServerManagementBaseCommand, load_config, run_tasks
+from ._core import ServerManagementBaseCommand, load_config, run_tasks, confirm, prompt
 
 
 class Command(ServerManagementBaseCommand):
 
     def handle(self, *args, **options):
         # Load server config from project
-        _, remote = load_config(env, options.get('remote', ''), config_user='root', debug=options.get('debug', False))
+        config, connection = load_config(options.get('remote', ''), config_user='root', debug=options.get('debug', False))
+        remote = config['remotes'][config['remote_name']]
 
         if django_settings.DEBUG:
-            abort(
+            print(
                 "You're currently using your local settings file, you need use production instead.\n"
                 "To use production settings pass `--settings={}` to the deploy command.".format(
                     os.getenv('DJANGO_SETTINGS_MODULE').replace('.local', '.production')
                 )
             )
+            exit()
 
         # Compress the domain names for nginx
-        domain_names = " ".join(django_settings.ALLOWED_HOSTS)
+        domain_names = ' '.join(django_settings.ALLOWED_HOSTS)
 
         # Use the site domain as a fallback domain
         fallback_domain_name = django_settings.SITE_DOMAIN
@@ -38,13 +38,12 @@ class Command(ServerManagementBaseCommand):
         setup_ssl_for = [
             domain_name
             for domain_name in domain_names.split(' ')
-            if local(f'dig +short {domain_name}', capture=True) == remote['server']['ip']
+            if connection.local(f'dig +short {domain_name}', capture=True) == remote['server']['ip']
         ]
 
         if not setup_ssl_for:
-            abort("Sorry, it's $CURRENT_YEAR, you need to use SSL. Please update the domain DNS to point to {}.".format(
-                remote['server']['ip']
-            ))
+            print(f"Sorry, it's $CURRENT_YEAR, you need to use SSL. Please update the domain DNS to point to {remote['server']['ip']}.")
+            exit()
 
         for domain_name in domain_names.split(' '):
             if domain_name not in setup_ssl_for:
@@ -72,4 +71,4 @@ class Command(ServerManagementBaseCommand):
                 'command': 'service nginx start',
             },
         ]
-        run_tasks(env, nginx_tasks)
+        run_tasks(connection, nginx_tasks)
