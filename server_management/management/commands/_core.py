@@ -68,7 +68,7 @@ def load_config(remote=None, config_user='deploy', debug=False):
     )
 
     # Make sure we can connect to the server
-    trial_run = connection.run('whoami', hide=True)
+    trial_run = connection.run('whoami')
     if trial_run.failed:
         print('Failed to connect to remote server')
         exit()
@@ -168,7 +168,7 @@ def confirm(text, default=None):
             return default
 
 
-def title_print(connection, title, state=''):
+def title_print(title, state=''):
     def _wrap_with(code):
         def inner(text, bold=False):
             c = code
@@ -182,17 +182,17 @@ def title_print(connection, title, state=''):
     yellow = _wrap_with('33')
 
     if state == 'task':
-        connection.fastprint('[{}] {} ... '.format(
+        print('[{}] {} ... '.format(
             yellow('TASK'),
             title,
-        ))
+        ), end='\r')
     elif state == 'succeeded':
-        connection.fastprint('\r[{}] {} ... done'.format(
+        print('\r[{}] {} ... done'.format(
             green('TASK'),
             title,
         ), end='\n')
     elif state == 'failed':
-        connection.fastprint('\r[{}] {} ... failed'.format(
+        print('\r[{}] {} ... failed'.format(
             red('TASK'),
             title,
         ), end='\n')
@@ -201,11 +201,17 @@ def title_print(connection, title, state=''):
 
 
 def check_request(task, result):
-    if result.succeeded:
+    try:
+        if result.ok:
+            title_print(task['title'], state='succeeded')
+        elif result.exited:
+            title_print(task['title'], state='failed')
+    except AttributeError:
+        # If we make it here, then we're trying to run some transfor command as they return a different result
+        # object that doesn't have a suceeded/exited state. They rely on paramiko or throw an OSError error if
+        # something fails. As such if we actually get a result object then we can assume that the task succeded.
+        # See http://docs.fabfile.org/en/latest/api/transfer.html#fabric.transfer.Result for more info
         title_print(task['title'], state='succeeded')
-    elif result.failed:
-        title_print(task['title'], state='failed')
-
 
 def run_tasks(connection, tasks, user=None):
     # Loop tasks
@@ -215,9 +221,9 @@ def run_tasks(connection, tasks, user=None):
         # Generic command
         if 'command' in task:
             if user:
-                task_result = connection.sudo(task['command'], user=user)
+                task_result = connection.sudo(task['command'], user=user, hide='both')
             else:
-                task_result = connection.run(task['command'])
+                task_result = connection.run(task['command'], hide='both')
         # Fabric API
         elif 'fabric_command' in task:
             task_result = getattr(connection, task['fabric_command'])(*task.get('fabric_args', []), **task.get('fabric_kwargs', {}))

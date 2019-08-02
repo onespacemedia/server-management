@@ -35,10 +35,10 @@ class Command(ServerManagementBaseCommand):
         with connection.cd(django_settings.SITE_ROOT):
 
             # Get the Git repo URL.
-            remotes = connection.local('git remote', capture=True).split('\n')
+            remotes = [remote for remote in connection.local('git remote').stdout.split('\n') if remote] # .stdout will add a blank newline after each staetment by default but that will make an empty array entry so we filter that out.
 
             if len(remotes) == 1:
-                git_remote = connection.local('git config --get remote.{}.url'.format(remotes[0]), capture=True)
+                git_remote = connection.local(f'git config --get remote.{remotes[0]}.url').stdout.strip()
             else:
                 def validate_choice(choice):
                     if choice in remotes:
@@ -46,11 +46,11 @@ class Command(ServerManagementBaseCommand):
                     raise Exception('That is not a valid choice.')
 
                 choice = prompt('Which Git remote would you like to use?', validate=validate_choice)
-                git_remote = connection.local('git config --get remote.{}.url'.format(choice), capture=True)
+                git_remote = connection.local(f'git config --get remote.{choice}.url').stdout.strip()
 
             # Check this is a github repo
             if not 'github.com' in git_remote:
-                raise Exception('Unable to determine Git host from remote URL: {}'.format(git_remote))
+                raise Exception(f'Unable to determine Git host from remote URL: {git_remote}')
 
             gh_regex = re.match(r'(?:git@|https://)github.com[:/]([\w\-]+)/([\w\-.]+)\.git$', git_remote)
 
@@ -91,7 +91,7 @@ class Command(ServerManagementBaseCommand):
         setup_ssl_for = [
             domain_name
             for domain_name in staging_domain_names.split(' ')
-            if connection.local(f'dig +short {domain_name}', capture=True) == remote['server']['ip']
+            if connection.local(f'dig +short {domain_name}').stdout.strip() == remote['server']['ip']
         ]
 
         if not setup_ssl_for:
@@ -449,36 +449,33 @@ class Command(ServerManagementBaseCommand):
         run_tasks(connection, db_tasks)
 
         # Get SSH Key from server
-        ssh_key = connection.run(f'cat ~{project_name}/.ssh/id_rsa.pub')
+        ssh_key = connection.run(f'cat ~{project_name}/.ssh/id_rsa.pub', hide='stdout').stdout.strip()
 
         # Get the current SSH keys in the repo
         task_title = 'Adding the SSH key to Github'
 
         title_print(task_title, state='task')
 
-        try:
-            response = requests.post(
-                f'https://api.github.com/repos/{github_account}/{github_repo}/keys',
-                json={
-                    'title': f'Application Server ({connection.host})',
-                    'key': ssh_key,
-                    'read_only': True,
-                },
-                headers={
-                    'Authorization': f'token {github_token}',
-                })
+        response = requests.post(
+            f'https://api.github.com/repos/{github_account}/{github_repo}/keys',
+            json={
+                'title': f'Application Server ({connection.host})',
+                'key': ssh_key,
+                'read_only': True,
+            },
+            headers={
+                'Authorization': f'token {github_token}',
+            }
+        )
 
-            if options.get('debug', False):
-                print(response.text)
-        except Exception as e:
-            title_print(task_title, state='failed')
-            raise e
+        if options.get('debug', False):
+            print(response.text)
 
         title_print(task_title, state='succeeded')
 
         # Define git tasks
         git_url = f'git@github.com:{github_account}/{github_repo}.git'
-        git_branch = connection.local('git symbolic-ref --short HEAD', capture=True)
+        git_branch = connection.local('git symbolic-ref --short HEAD').stdout.strip()
         git_tasks = [
             {
                 'title': 'Add Github key to known hosts',
@@ -494,7 +491,7 @@ class Command(ServerManagementBaseCommand):
             },
         ]
 
-        run_tasks(connection, git_tasks, user=project_name)
+        run_tasks(connection, git_tasks)
 
         # Define static tasks
         static_tasks = [
@@ -516,7 +513,7 @@ class Command(ServerManagementBaseCommand):
         run_tasks(connection, static_tasks)
 
         # Define venv tasks
-        git_hash = connection.run(f'cd /var/www/{project_name}; git rev-parse --short HEAD')
+        git_hash = connection.run(f'cd /var/www/{project_name}; git rev-parse --short HEAD', hide='stdout').stdout.strip()
         venv_path = f'/var/www/{project_name}/.venv-{git_hash}'
 
         venv_tasks = [
