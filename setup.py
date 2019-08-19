@@ -7,7 +7,7 @@ from setuptools.command.install import install
 # allow setup.py to be run from any path
 os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
-VERSION = '3.2.1'
+VERSION = '3.2.2'
 
 
 setup(
