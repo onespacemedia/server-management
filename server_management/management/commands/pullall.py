@@ -6,7 +6,7 @@ from server_management.management.commands._core import ServerManagementBaseComm
 class Command(ServerManagementBaseCommand):
 
     def handle(self, *args, **options):
-        remote_prompt = get_remote(options.get('remote', ''))
+        remote_prompt, _ = get_remote(options.get('remote', ''))
 
         title_print('Pulling database', 'task')
         call_command('pulldb', remote=remote_prompt)
