@@ -236,10 +236,6 @@ class Command(ServerManagementBaseCommand):
 
         # Define base tasks
         base_tasks = [
-            {
-                'title': 'Add Python 3.6 PPA',
-                'command': 'add-apt-repository -y ppa:jonathonf/python-3.6',
-            },
             # Add nginx and Let's Encrypt PPAs.  We add them up here because an
             # `apt-get update` is require for them to be truly added and that
             # comes next.
