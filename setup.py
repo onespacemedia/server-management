@@ -7,13 +7,14 @@ from setuptools.command.install import install
 # allow setup.py to be run from any path
 os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
-VERSION = '3.2.2'
+VERSION = '3.3.1'
 
 
 setup(
     name='onespacemedia-server-management',
     version=VERSION,
     packages=[
+        'fabvenv',
         'server_management',
         'server_management.management',
         'server_management.management.commands',
@@ -24,7 +25,7 @@ setup(
     author='James Foley, Daniel Samuels, Aidan Currah',
     author_email='developers@onespacemedia.com',
     python_requires='>=3',
-    install_requires=['django', 'fabric3', 'requests', 'fabric3-virtualenv'],
+    install_requires=['django', 'fabric3', 'requests'],
     extras_require={
         'testing': [
             'astroid==1.5.3',
